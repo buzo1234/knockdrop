@@ -1,6 +1,9 @@
 #!/bin/sh
 # Resolve symlinks so `ln -s .../knockdrop /usr/local/bin/knockdrop` works.
 SELF="$0"
+SELF="$(cd "$(dirname "$SELF")" && pwd)/$(basename "$SELF")"   # absolute, no ./
+# the menu bar app runs this path; for Homebrew it's /opt/homebrew/bin/knockdrop, stable across upgrades
+KNOCKDROP_BIN="$SELF"; export KNOCKDROP_BIN
 while [ -L "$SELF" ]; do
   L="$(readlink "$SELF")"
   case "$L" in /*) SELF="$L" ;; *) SELF="$(dirname "$SELF")/$L" ;; esac

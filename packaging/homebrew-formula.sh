@@ -15,7 +15,7 @@ class Knockdrop < Formula
 
   def install
     inreplace "knockdrop.py", /^__version__ = .*\$/, "__version__ = \"#{version}\""
-    libexec.install "knockdrop", "knockdrop.py", "macimu"
+    libexec.install "knockdrop", "knockdrop.py", "macimu", "menubar"
     bin.install_symlink libexec/"knockdrop"
   end
 
@@ -23,6 +23,10 @@ class Knockdrop < Formula
     <<~EOS
       Run \`knockdrop check\` once. If it reports Local Network access as BLOCKED, allow your
       terminal app in System Settings > Privacy & Security > Local Network.
+
+      Receive without typing a command -- just knock -- with the menu bar app:
+        knockdrop menubar
+      After upgrading, run it again (or use "Restart to Finish Updating" in its menu).
     EOS
   end
 

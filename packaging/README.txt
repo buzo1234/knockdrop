@@ -14,6 +14,7 @@ INSTALL FROM THIS ZIP (any Mac, Apple Silicon or Intel, macOS 11+)
 USE
   Receive:  knockdrop receive                    -> repeat the sender's rhythm; files go to ~/Downloads
   Send:     knockdrop send photo.jpg notes.pdf   -> make up a rhythm
+            knockdrop send                       -> share your clipboard (lands on theirs)
   Practice: knockdrop knock                      -> shows each pattern and whether it matches the last
 
   Macs with the motion sensor (MacBook M2 and newer): knock with a knuckle on the palm rest.
