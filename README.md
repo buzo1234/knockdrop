@@ -85,7 +85,7 @@ Knock with a knuckle on the palm rest or beside the trackpad, at least 3 times. 
 | Flag | |
 |---|---|
 | `--keys` | Tap the space bar instead of knocking |
-| `--sensitivity N` | Knock threshold, default `10`. Lower is more sensitive |
+| `--sensitivity N` | Knock threshold, default `2.5`. Lower is more sensitive |
 | `--tolerance F` | How different two rhythms may be and still match, default `0.12` |
 | `send --multi` | Keep sharing after the first receiver |
 | `send -y` | Don't ask to confirm the rhythm |
@@ -118,7 +118,7 @@ Any mix works: a knocker can share with a space-bar tapper.
    match? ───────────── files ────────────────▶   checks each SHA-256, saves
 ```
 
-1. **Reading knocks.** The accelerometer and gyroscope in Apple Silicon MacBooks aren't exposed by any public API. knockdrop reads them at 800 Hz through the bundled [`macimu`](https://github.com/olvvier/apple-silicon-accelerometer) library. It calibrates on 1.2 s of stillness, then counts spikes above the noise floor as knocks.
+1. **Reading knocks.** The accelerometer and gyroscope in Apple Silicon MacBooks aren't exposed by any public API. knockdrop reads them at 800 Hz through the bundled [`macimu`](https://github.com/olvvier/apple-silicon-accelerometer) library. It calibrates on 1.2 s of stillness, then counts short bursts of gyroscope energy above the noise floor as knocks. A knock twitches the chassis sharply; hands landing on the palm rest mostly show up on the accelerometer, so that's ignored.
 2. **Comparing rhythms.** Each gap between knocks becomes a fraction of the whole pattern, so a slow and a fast version of the same rhythm look identical. Two patterns match when every fraction is within the tolerance.
 3. **Finding each other.** The sender announces itself with UDP multicast and broadcast. The rhythm is never broadcast; only the sender ever compares it.
 4. **Transfer.** Files stream over TCP and are checked against their SHA-256 before saving. An offer closes after one transfer, 8 wrong attempts, or 5 minutes.

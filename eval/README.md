@@ -6,7 +6,7 @@ new knocking.
 
     python3 eval/record.py                      # guided recording session (~12 min; --quick ~5 min)
     python3 eval/run_eval.py                    # score the baseline on eval/data
-    python3 eval/run_eval.py --sweep threshold=6,8,10,12,15
+    python3 eval/run_eval.py --sweep threshold=1.5,2,2.5,3,4
     python3 eval/run_eval.py -v                 # per-clip: expected vs detected knocks, gaps
 
 ## What gets recorded

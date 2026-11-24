@@ -47,25 +47,39 @@ CHUNK = 1 << 16
 class KnockDetector:
     """Streaming knock detector over 6-channel IMU samples (accel g, gyro deg/s).
 
-    Each channel is high-passed with a slow EMA baseline and z-scored against
-    noise measured during calibration. A knock is the moment the combined
-    z-energy crosses `threshold`; it re-arms only after energy settles below
+    Only the gyroscope is used. A knuckle knock makes the chassis twitch: a sharp,
+    broadband gyro burst right at impact. The accelerometer is low-pass filtered
+    in hardware, rings ~40 Hz for 100+ ms after the impact, and also picks up
+    hands landing on / lifting off the palm rest. Mixing it in made real knocks
+    and those non-knock events overlap in the recorded eval clips.
+
+    Each gyro axis is high-passed (EMA baseline, `baseline_s`) and z-scored against
+    noise measured during calibration. Energy is the mean squared z, smoothed over
+    `window_s`, so a knock's alternating-sign burst adds up instead of being judged
+    one sample at a time; pure noise sits near 1. A knock is the moment
+    sqrt(energy) crosses `threshold`; it re-arms only after it settles below
     threshold/2 for `settle` seconds and at least `refractory` seconds passed.
     """
 
-    def __init__(self, threshold=10.0, refractory=0.09, settle=0.03, baseline_s=0.2, rate=800.0):
+    CHANNELS = slice(3, 6)   # gyro x, y, z
+
+    def __init__(self, threshold=2.5, refractory=0.08, settle=0.02, baseline_s=0.02,
+                 window_s=0.015, rate=800.0):
         self.threshold = threshold
         self.refractory = refractory
         self.settle = settle
         self.alpha = 1.0 / (baseline_s * rate)
+        self.beta = 1.0 / (window_s * rate)
         self.base = None
         self.noise = None
+        self.energy = 0.0
         self._calib = []
         self.armed = True
         self.last_knock = -1e9
         self.quiet_since = None
 
     def _highpass(self, v):
+        v = v[self.CHANNELS]
         if self.base is None:
             self.base = list(v)
         out = []
@@ -78,19 +92,20 @@ class KnockDetector:
         self._calib.append(self._highpass(v))
 
     def finish_calibration(self):
-        cols = list(zip(*self._calib[len(self._calib) // 4:])) or [[0.0]] * 6
-        floors = [5e-4] * 3 + [0.05] * 3
+        cols = list(zip(*self._calib[len(self._calib) // 4:])) or [[0.0]] * 3
         self.noise = []
-        for c, floor in zip(cols, floors):
+        for c in cols:
             s = sorted(abs(x) for x in c)
             mad = s[len(s) // 2] if s else 0.0
-            self.noise.append(max(1.4826 * mad, floor))
+            self.noise.append(max(1.4826 * mad, 0.03))   # deg/s; floor guards a dead-quiet calibration
         self._calib = []
 
     def feed(self, t, v):
         """Feed one sample; return the knock time if this sample starts a knock."""
         hp = self._highpass(v)
-        e = math.sqrt(sum((x / n) ** 2 for x, n in zip(hp, self.noise)) / len(hp))
+        z2 = sum((x / n) ** 2 for x, n in zip(hp, self.noise)) / len(hp)
+        self.energy += self.beta * (z2 - self.energy)
+        e = math.sqrt(self.energy)
         if self.armed:
             if e > self.threshold and t - self.last_knock > self.refractory:
                 self.armed = False
@@ -685,8 +700,8 @@ def add_knock_options(p, sub=False):
     d = (lambda v: argparse.SUPPRESS) if sub else (lambda v: v)
     p.add_argument("--keys", action="store_true", default=d(False),
                    help="tap the space bar instead of knocking (automatic on Macs without the sensor)")
-    p.add_argument("--sensitivity", type=float, default=d(10.0), metavar="N",
-                   help="knock threshold in noise units; lower = more sensitive (default 10)")
+    p.add_argument("--sensitivity", type=float, default=d(2.5), metavar="N",
+                   help="knock threshold in noise units; lower = more sensitive (default 2.5)")
     p.add_argument("--tolerance", type=float, default=d(0.12), metavar="F",
                    help="max rhythm difference, as a fraction of pattern length (default 0.12)")
 
