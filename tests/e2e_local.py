@@ -155,7 +155,7 @@ try:
     a.stop(); s.stop()
     shutil.rmtree(OUT); os.makedirs(OUT)
 
-    print("same table: rhythm felt just before the offer appears -> received with no action")
+    print("same table: rhythm felt just before the offer appears -> flagged, taken with one key (never on its own)")
     doc = os.path.join(TMP, "deck.pdf")
     with open(doc, "wb") as fh:
         fh.write(os.urandom(300_000))
@@ -163,23 +163,42 @@ try:
     a.wait("hello")
     a.cmd({"cmd": "felt", "times": P_SAME})      # as if the laptop felt the sender's knocks on the table
     s = share([doc]); procs.append(s)
+    st = a.wait("status", 10, where=lambda e: any(o.get("felt") for o in e["offers"]))
+    check("offer marked as felt on the table", st is not None, str([e for e in a.events if e["event"] == "status"]))
+    time.sleep(2)
+    check("not received without asking", os.listdir(OUT) == [] and not any(e["event"] == "received" for e in a.events),
+          str(os.listdir(OUT)))
+    a.cmd({"cmd": "take", "id": st["offers"][0]["id"] if st else ""})
     r = a.wait("received", 10)
-    check("auto-received from the table", r is not None and os.path.exists(os.path.join(OUT, "deck.pdf")),
-          str([e for e in a.events if e["event"] != "status"]))
+    check("taken with the felt rhythm", r is not None and r.get("via") == "table"
+          and os.path.exists(os.path.join(OUT, "deck.pdf")), str([e for e in a.events if e["event"] != "status"]))
     check("file intact", r is not None and kd.file_digest(os.path.join(OUT, "deck.pdf")) == kd.file_digest(doc))
     s.stop()
 
-    print("same table, different rhythm felt -> not received; then knock (keyboard) -> received")
+    print("same table, different rhythm felt -> take fails; then arm and tap (keyboard) -> received")
     shutil.rmtree(OUT); os.makedirs(OUT)
     a.cmd({"cmd": "felt", "times": P_OTHER})
     s = share([doc]); procs.append(s)
+    st = a.wait("status", 10, where=lambda e: any(o.get("felt") for o in e["offers"]))
+    a.cmd({"cmd": "take", "id": st["offers"][0]["id"] if st else ""})
     miss = a.wait("pattern", 10, where=lambda e: e.get("via") == "table")
-    check("table claim rejected", miss is not None and miss.get("result") == "no_match", str(miss))
+    check("table take rejected", miss is not None and miss.get("result") == "no_match", str(miss))
     check("nothing saved", os.listdir(OUT) == [])
+    a.cmd({"cmd": "arm", "on": True})
     a.cmd({"cmd": "keys", "on": True})
     a.cmd({"cmd": "pattern", "times": P_SAME})
     r = a.wait("received", 10)
-    check("received after knocking the rhythm", r is not None and os.listdir(OUT) == ["deck.pdf"], str(os.listdir(OUT)))
+    check("received after tapping the rhythm", r is not None and os.listdir(OUT) == ["deck.pdf"], str(os.listdir(OUT)))
+    a.stop(); s.stop()
+
+    print("not armed: no knock events and no claims while someone shares")
+    shutil.rmtree(OUT); os.makedirs(OUT)
+    s = share([doc]); procs.append(s)
+    a = Proc(["agent", "--allow-self", "--out", OUT]); procs.append(a)
+    a.wait("status", 5, where=lambda e: e["offers"])
+    time.sleep(2.5)
+    noisy = [e for e in a.events if e["event"] in ("knock", "pattern", "trying", "received", "ready")]
+    check("quiet until asked", noisy == [] and os.listdir(OUT) == [], str(noisy))
     a.stop(); s.stop()
 
     print("own offers are ignored by the background receiver")

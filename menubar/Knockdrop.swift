@@ -1,7 +1,13 @@
 // Knockdrop menu bar app. Built on each Mac by `knockdrop menubar` with the Command Line Tools'
 // swiftc, so it needs no signing or Xcode project. All knock detection and networking stays in
 // knockdrop.py; this app runs `knockdrop agent` (background receiver) and `knockdrop send --events`
-// (sharing) and turns their JSON event lines into a menu, an overlay, sounds and notifications.
+// (sharing) and turns their JSON event lines into a menu, a notice and an overlay. It plays no sounds.
+//
+// Calm by default: nothing listens or pops up until you press a shortcut.
+//   ⌃⌥K  receive: takes an offer knocked on your table at once, otherwise knock it (or tap
+//        the space bar). Someone sharing nearby only gets a small notice under the menu bar
+//        icon, held back while you're typing, and the tap count in the menu bar.
+//   ⌃⌥C  share the clipboard; press it again to stop sharing. Locking the Mac stops it too.
 
 import AppKit
 import Carbon
@@ -9,6 +15,8 @@ import Carbon
 let appID = "io.github.buzo1234.knockdrop"
 let defaults = UserDefaults.standard
 let home = FileManager.default.homeDirectoryForCurrentUser
+let receiveKey = "⌃⌥K"
+let shareKey = "⌃⌥C"
 
 // MARK: - knockdrop child process speaking JSON lines
 
@@ -62,7 +70,161 @@ final class KDProcess {
     }
 }
 
-// MARK: - overlay: knock feedback, results, and space-bar rhythm entry (keyboard only, no mouse)
+// MARK: - notice: a small card under the menu bar icon. Never takes focus; click it to act.
+
+final class ClickView: NSView {
+    var onClick: (() -> Void)?
+    override func mouseDown(with e: NSEvent) { onClick?() }
+    override func acceptsFirstMouse(for e: NSEvent?) -> Bool { true }
+}
+
+final class Notice {
+    private let panel: NSPanel
+    private let icon = NSImageView()
+    private let titleField = NSTextField(labelWithString: "")
+    private let subField = NSTextField(labelWithString: "")
+    private let keyField = NSTextField(labelWithString: "")
+    private let keyBox = NSView()
+    private let click = ClickView()
+    private var hideTimer: Timer?
+    private var waitTimer: Timer?
+    private var onClick: (() -> Void)?
+    var anchor: (() -> NSRect?)?   // the status item's frame on screen
+    static let width: CGFloat = 330, height: CGFloat = 58
+
+    init() {
+        let r = NSRect(x: 0, y: 0, width: Notice.width, height: Notice.height)
+        panel = NSPanel(contentRect: r, styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
+        panel.level = .statusBar
+        panel.isOpaque = false
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+        panel.hidesOnDeactivate = false
+        panel.becomesKeyOnlyIfNeeded = true
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient, .ignoresCycle]
+        let fx = NSVisualEffectView(frame: r)
+        fx.material = .popover
+        fx.blendingMode = .behindWindow
+        fx.state = .active
+        fx.wantsLayer = true
+        fx.layer?.cornerRadius = 13
+        fx.layer?.masksToBounds = true
+        panel.contentView = fx
+
+        icon.symbolConfiguration = .init(pointSize: 17, weight: .medium)
+        icon.contentTintColor = .controlAccentColor
+        titleField.font = .systemFont(ofSize: 13, weight: .semibold)
+        subField.font = .systemFont(ofSize: 11.5)
+        subField.textColor = .secondaryLabelColor
+        for f in [titleField, subField] { f.lineBreakMode = .byTruncatingTail; f.maximumNumberOfLines = 1 }
+        keyField.font = .monospacedSystemFont(ofSize: 12, weight: .semibold)
+        keyField.textColor = .labelColor
+        keyBox.wantsLayer = true
+        keyBox.layer?.cornerRadius = 6
+        keyBox.layer?.borderWidth = 1
+        keyBox.layer?.borderColor = NSColor.separatorColor.cgColor
+        keyBox.layer?.backgroundColor = NSColor.quaternaryLabelColor.withAlphaComponent(0.12).cgColor
+
+        let text = NSStackView(views: [titleField, subField])
+        text.orientation = .vertical
+        text.alignment = .leading
+        text.spacing = 1
+        for v in [icon, text, keyBox, keyField, click] as [NSView] { v.translatesAutoresizingMaskIntoConstraints = false }
+        click.frame = fx.bounds
+        fx.addSubview(click)
+        click.addSubview(icon)
+        click.addSubview(text)
+        click.addSubview(keyBox)
+        keyBox.addSubview(keyField)
+        NSLayoutConstraint.activate([
+            click.leadingAnchor.constraint(equalTo: fx.leadingAnchor), click.trailingAnchor.constraint(equalTo: fx.trailingAnchor),
+            click.topAnchor.constraint(equalTo: fx.topAnchor), click.bottomAnchor.constraint(equalTo: fx.bottomAnchor),
+            icon.leadingAnchor.constraint(equalTo: click.leadingAnchor, constant: 14),
+            icon.centerYAnchor.constraint(equalTo: click.centerYAnchor),
+            icon.widthAnchor.constraint(equalToConstant: 22),
+            text.leadingAnchor.constraint(equalTo: icon.trailingAnchor, constant: 10),
+            text.centerYAnchor.constraint(equalTo: click.centerYAnchor),
+            text.trailingAnchor.constraint(lessThanOrEqualTo: keyBox.leadingAnchor, constant: -10),
+            keyBox.trailingAnchor.constraint(equalTo: click.trailingAnchor, constant: -14),
+            keyBox.centerYAnchor.constraint(equalTo: click.centerYAnchor),
+            keyField.leadingAnchor.constraint(equalTo: keyBox.leadingAnchor, constant: 7),
+            keyField.trailingAnchor.constraint(equalTo: keyBox.trailingAnchor, constant: -7),
+            keyField.topAnchor.constraint(equalTo: keyBox.topAnchor, constant: 3),
+            keyField.bottomAnchor.constraint(equalTo: keyBox.bottomAnchor, constant: -3),
+        ])
+        text.setContentCompressionResistancePriority(.defaultLow, for: .horizontal)
+        keyBox.setContentCompressionResistancePriority(.required, for: .horizontal)
+        click.onClick = { [weak self] in
+            let act = self?.onClick
+            self?.hide()
+            act?()
+        }
+    }
+
+    var visible: Bool { panel.isVisible }
+
+    /// Show now. `key` is the shortcut drawn as a keycap; clicking the card does the same thing.
+    func show(_ title: String, _ sub: String = "", symbol: String = "hand.tap.fill", key: String? = nil,
+              hideAfter: TimeInterval = 5, onClick: (() -> Void)? = nil) {
+        waitTimer?.invalidate()
+        titleField.stringValue = title
+        subField.stringValue = sub
+        subField.isHidden = sub.isEmpty
+        icon.image = NSImage(systemSymbolName: symbol, accessibilityDescription: nil)
+        keyField.stringValue = key ?? ""
+        keyBox.isHidden = key == nil
+        self.onClick = onClick
+        place()
+        if !panel.isVisible {
+            panel.alphaValue = 0
+            panel.orderFrontRegardless()
+            NSAnimationContext.runAnimationGroup { $0.duration = 0.18; panel.animator().alphaValue = 1 }
+        }
+        hideTimer?.invalidate()
+        hideTimer = Timer.scheduledTimer(withTimeInterval: hideAfter, repeats: false) { [weak self] _ in self?.hide() }
+    }
+
+    /// Show when the person pauses typing (at most `maxWait` later), so it never lands mid-sentence.
+    /// `stillWanted` is checked again right before showing.
+    func showAtPause(maxWait: TimeInterval = 20, stillWanted: @escaping () -> Bool, _ show: @escaping () -> Void) {
+        waitTimer?.invalidate()
+        let start = Date()
+        let check = { [weak self] (t: Timer?) in
+            guard stillWanted() else { t?.invalidate(); return }
+            let idle = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown)
+            if idle >= 1.5 || Date().timeIntervalSince(start) >= maxWait {
+                t?.invalidate()
+                self?.waitTimer = nil
+                show()
+            }
+        }
+        let idle = CGEventSource.secondsSinceLastEventType(.combinedSessionState, eventType: .keyDown)
+        if idle >= 1.5 { show(); return }
+        waitTimer = Timer.scheduledTimer(withTimeInterval: 0.4, repeats: true) { check($0) }
+    }
+
+    func hide() {
+        hideTimer?.invalidate()
+        waitTimer?.invalidate()
+        guard panel.isVisible else { return }
+        NSAnimationContext.runAnimationGroup({ $0.duration = 0.25; panel.animator().alphaValue = 0 },
+                                             completionHandler: { [weak self] in
+                                                 if self?.panel.alphaValue == 0 { self?.panel.orderOut(nil) }
+                                             })
+    }
+
+    private func place() {
+        let screen = NSScreen.main ?? NSScreen.screens.first
+        guard let v = screen?.visibleFrame else { return }
+        var x = v.maxX - Notice.width - 12
+        if let a = anchor?(), a.width > 0, v.contains(NSPoint(x: a.midX, y: v.midY)) {
+            x = min(max(a.midX - Notice.width / 2, v.minX + 8), v.maxX - Notice.width - 8)
+        }
+        panel.setFrameOrigin(NSPoint(x: x, y: v.maxY - Notice.height - 8))
+    }
+}
+
+// MARK: - overlay: knocking and space-bar rhythm entry (only while you asked for it)
 
 final class KeyPanel: NSPanel {
     override var canBecomeKey: Bool { true }
@@ -82,15 +244,19 @@ final class Overlay {
     private let tapView = TapView()
     private var hideTimer: Timer?
     private var tapTimer: Timer?
+    private var idleTimer: Timer?
     private var taps: [TimeInterval] = []
-    private var capturePrompt = ""
+    private var prompt = ""
+    private var expected = 0
     private var onCaptured: (([Double]) -> Void)?
     private var onCancel: (() -> Void)?
+    private var onFirstTap: (() -> Void)?
     private var previousApp: NSRunningApplication?
     private(set) var capturing = false
+    private var checking = false
 
     init() {
-        panel = KeyPanel(contentRect: NSRect(x: 0, y: 0, width: 380, height: 118),
+        panel = KeyPanel(contentRect: NSRect(x: 0, y: 0, width: 400, height: 118),
                          styleMask: [.borderless, .nonactivatingPanel], backing: .buffered, defer: false)
         panel.level = .statusBar
         panel.isOpaque = false
@@ -98,7 +264,7 @@ final class Overlay {
         panel.hasShadow = true
         panel.hidesOnDeactivate = false
         panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .transient]
-        let fx = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: 380, height: 118))
+        let fx = NSVisualEffectView(frame: NSRect(x: 0, y: 0, width: 400, height: 118))
         fx.material = .hudWindow
         fx.blendingMode = .behindWindow
         fx.state = .active
@@ -156,37 +322,94 @@ final class Overlay {
         if !capturing { panel.orderOut(nil) }
     }
 
-    /// Take the keyboard briefly and record space-bar taps. Esc cancels, Return finishes early.
-    func capture(title: String, prompt: String, onCaptured: @escaping ([Double]) -> Void, onCancel: @escaping () -> Void) {
+    /// Take the keyboard while the person enters a rhythm: space-bar taps, or knocks fed in with
+    /// `knocked(_:)`. Esc cancels, Return finishes early, and it gives up after 25 s of nothing.
+    /// The caller ends it with `endCapture()` (done) or `retry(_:)` (try again).
+    func capture(title: String, prompt: String, expected: Int = 0, onFirstTap: (() -> Void)? = nil,
+                 onCaptured: @escaping ([Double]) -> Void, onCancel: @escaping () -> Void) {
         if capturing { return }
         capturing = true
+        checking = false
         taps = []
-        capturePrompt = prompt
+        self.prompt = prompt
+        self.expected = expected
+        self.onFirstTap = onFirstTap
         self.onCaptured = onCaptured
         self.onCancel = onCancel
         previousApp = NSWorkspace.shared.frontmostApplication
-        show(title, dots: "· · ·", sub: prompt)
+        show(title, dots: dots(0), sub: prompt)
         NSApp.activate(ignoringOtherApps: true)
         panel.makeKeyAndOrderFront(nil)
         panel.makeFirstResponder(tapView)
+        touch()
+    }
+
+    /// A knock felt by the sensor (n so far). Ignored once the space bar is in use.
+    func knocked(_ n: Int) {
+        guard capturing, !checking, taps.isEmpty else { return }
+        dotsField.stringValue = dots(n)
+        touch()
+    }
+
+    func setPrompt(_ s: String) {
+        prompt = s
+        if capturing && !checking { subField.stringValue = s; subField.isHidden = s.isEmpty }
+    }
+
+    func setChecking(_ s: String) {
+        guard capturing else { return }
+        checking = true
+        tapTimer?.invalidate()
+        subField.stringValue = s
+        touch()
+    }
+
+    /// Start over with a message, still listening.
+    func retry(_ message: String?) {
+        guard capturing else { return }
+        checking = false
+        taps = []
+        tapTimer?.invalidate()
+        dotsField.stringValue = dots(0)
+        subField.stringValue = message.map { "\($0) · \(prompt)" } ?? prompt
+        touch()
+    }
+
+    func endCapture() {
+        guard capturing else { return }
+        tapTimer?.invalidate()
+        idleTimer?.invalidate()
+        capturing = false
+        checking = false
+        panel.orderOut(nil)
+        previousApp?.activate(options: [])
+    }
+
+    private func touch() {
+        idleTimer?.invalidate()
+        idleTimer = Timer.scheduledTimer(withTimeInterval: 25, repeats: false) { [weak self] _ in self?.cancel() }
+    }
+
+    private func cancel() {
+        endCapture()
+        onCancel?()
     }
 
     private func key(_ e: NSEvent) {
         guard capturing else { return }
         switch e.keyCode {
         case 49:  // space
-            if e.isARepeat { return }
+            if e.isARepeat || checking { return }
+            if taps.isEmpty { onFirstTap?() }
             taps.append(e.timestamp)
-            NSSound(named: "Tink")?.play()
-            dotsField.stringValue = String(repeating: "● ", count: taps.count).trimmingCharacters(in: .whitespaces)
-            dotsField.isHidden = false
+            dotsField.stringValue = dots(taps.count)
+            touch()
             tapTimer?.invalidate()
             tapTimer = Timer.scheduledTimer(withTimeInterval: 1.5, repeats: false) { [weak self] _ in self?.finish() }
         case 36, 76:  // return / enter
-            finish()
+            if !checking { finish() }
         case 53:  // esc
-            end()
-            onCancel?()
+            cancel()
         default:
             break
         }
@@ -195,21 +418,21 @@ final class Overlay {
     private func finish() {
         tapTimer?.invalidate()
         if taps.count < 3 {
-            taps = []
-            show(titleField.stringValue, dots: "· · ·", sub: "At least 3 taps — try again. " + capturePrompt)
+            retry(taps.isEmpty ? nil : "At least 3 taps")
             return
         }
         let t0 = taps[0]
         let times = taps.map { $0 - t0 }
-        end()
+        taps = []
         onCaptured?(times)
     }
 
-    private func end() {
-        tapTimer?.invalidate()
-        capturing = false
-        panel.orderOut(nil)
-        previousApp?.activate(options: [])
+    /// "● ● ○ ○ ○" when we know how many knocks the sharer used, else "● ●" / "· · ·".
+    private func dots(_ n: Int) -> String {
+        if expected > 0 && n <= expected {
+            return (Array(repeating: "●", count: n) + Array(repeating: "○", count: expected - n)).joined(separator: " ")
+        }
+        return n == 0 ? "· · ·" : Array(repeating: "●", count: min(n, 16)).joined(separator: " ")
     }
 }
 
@@ -250,6 +473,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var statusItem: NSStatusItem!
     let menu = NSMenu()
     let overlay = Overlay()
+    let notice = Notice()
     var command: [String] = []
     var log: FileHandle?
 
@@ -257,16 +481,21 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var agentRestarts = 0
     var agentInfo = "Starting…"
     var offers: [[String: Any]] = []
+    var announced: Set<String> = []        // offer ids we showed a notice for ("id" or "id/felt")
     var hasSensor = true
     var outDir = home.appendingPathComponent("Downloads").path
     var version = ""
     var appStale = false
-    var receivingKeys = false
+    var armed = false                      // ⌃⌥K overlay open: knock or tap the space bar
+    var sensorReady = false
+    var taking: String?                    // offer id being taken with the rhythm felt on the table
 
     var sender: KDProcess?
     var shareInfo: String?
     var shareRhythm: String?
+    var shareEnds: Date?
     var sharedWith: [String] = []
+    var tick: Timer?
     var recents: [Recent] = []
 
     var receiveOn: Bool {
@@ -289,15 +518,26 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         statusItem.button?.toolTip = "Knockdrop"
         menu.delegate = self
         statusItem.menu = menu
+        notice.anchor = { [weak self] in
+            guard let b = self?.statusItem.button, let w = b.window else { return nil }
+            return w.convertToScreen(b.convert(b.bounds, to: nil))
+        }
         if !defaults.bool(forKey: "loginConfigured") {   // first run: start at login (toggle in the menu)
             setLogin(true)
             defaults.set(true, forKey: "loginConfigured")
         }
         let hk = installHotKeys([
-            (id: 1, keyCode: kVK_ANSI_K, action: { [weak self] in self?.logLine("hotkey ⌃⌥K"); self?.tapToReceive() }),
-            (id: 2, keyCode: kVK_ANSI_C, action: { [weak self] in self?.logLine("hotkey ⌃⌥C"); self?.shareClipboard() }),
+            (id: 1, keyCode: kVK_ANSI_K, action: { [weak self] in self?.logLine("hotkey ⌃⌥K"); self?.receive() }),
+            (id: 2, keyCode: kVK_ANSI_C, action: { [weak self] in self?.logLine("hotkey ⌃⌥C"); self?.shareOrStop() }),
         ])
         logLine("started \(command.joined(separator: " ")); hotkeys \(hk.allSatisfy { $0 == noErr } ? "ok" : "FAILED \(hk)")")
+
+        // Walking away ends a share: nobody should pick up your clipboard from an empty desk.
+        DistributedNotificationCenter.default().addObserver(forName: .init("com.apple.screenIsLocked"), object: nil,
+                                                            queue: .main) { [weak self] _ in self?.walkedAway("locked") }
+        NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil,
+                                                          queue: .main) { [weak self] _ in self?.walkedAway("went to sleep") }
+
         if command.isEmpty {
             agentInfo = "Can't find knockdrop — run `knockdrop menubar` again"
         } else if receiveOn {
@@ -344,6 +584,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             guard let self = self, let p = p else { return }
             self.agent = nil
             self.offers = []
+            self.disarm(tellAgent: false)
             self.updateIcon()
             if p.stopping || !self.receiveOn { return }
             self.agentRestarts += 1
@@ -359,6 +600,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func stopAgent() {
+        disarm()
         agent?.stop()
         agent = nil
         offers = []
@@ -382,32 +624,26 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case "status":
             offers = e["offers"] as? [[String: Any]] ?? []
             if offers.isEmpty {
-                agentInfo = tableOn ? "Listening — feeling the table for knocks" : "Listening — no one nearby is sharing"
+                agentInfo = "No one nearby is sharing"
+                if armed {
+                    disarm()
+                    notice.show("The share ended", "It expired, was stopped, or got too many wrong rhythms",
+                                symbol: "hand.raised.slash")
+                }
             } else {
-                let o = offers[0]
-                let who = o["from"] as? String ?? "Someone"
-                let what = o["label"] as? String ?? "something"
-                let more = offers.count > 1 ? " (+\(offers.count - 1) more)" : ""
-                agentInfo = "\(who) is sharing \(what)\(more) — " + (hasSensor ? "knock their rhythm" : "press ⌃⌥K")
+                agentInfo = "\(offerTitle(offers[0]))" + (offers.count > 1 ? " (+\(offers.count - 1) more)" : "")
             }
+            announceOffers()
             updateIcon()
-        case "knock":
-            guard !offers.isEmpty, !receivingKeys else { return }   // only show knocks when they can matter
-            let n = e["n"] as? Int ?? 1
-            NSSound(named: "Tink")?.play()
-            overlay.show("Knocking…", dots: dotString(n), sub: "Knock \(offerSummary())", hideAfter: 4)
+        case "ready":
+            sensorReady = true
+            if armed { overlay.setPrompt(armPrompt()) }
+        case "knock":   // only sent while armed
+            overlay.knocked(e["n"] as? Int ?? 1)
+        case "trying":
+            if armed { overlay.setChecking("Checking the rhythm…") }
         case "pattern":
-            let result = e["result"] as? String ?? ""
-            let via = e["via"] as? String ?? ""
-            if result == "no_match" && via != "table" {
-                NSSound(named: "Basso")?.play()
-                overlay.show("Rhythm didn't match", sub: "Try again — \(offerSummary())", hideAfter: 3)
-            } else if result == "no_offer" && via != "table" {
-                let counts = (e["offer_knocks"] as? [Int] ?? []).map(String.init).joined(separator: " or ")
-                NSSound(named: "Funk")?.play()
-                overlay.show("\(e["knocks"] as? Int ?? 0) knocks", sub: counts.isEmpty ? "No one is sharing right now"
-                                                                     : "They knocked \(counts) times — try again", hideAfter: 3)
-            }
+            patternResult(e)
         case "received":
             received(e)
         case "error":
@@ -421,64 +657,160 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
     }
 
+    /// Someone started sharing: a small card under the menu bar icon, once per offer, held back
+    /// while you're typing. No focus change, no sensor. ⌃⌥K or a click takes it.
+    func announceOffers() {
+        for o in offers {
+            guard let id = o["id"] as? String else { continue }
+            let felt = o["felt"] as? Bool == true
+            let tag = felt ? id + "/felt" : id
+            if announced.contains(tag) { continue }
+            announced.insert(tag)
+            announced.insert(id)
+            let title = felt ? "\(who(o)) knocked on your table" : "\(who(o)) is sharing \(what(o))"
+            let sub = felt ? "\(what(o).capitalizedFirst) · press to take it, no knocking"
+                           : "\(o["knocks"] as? Int ?? 0) knocks · press to knock it in"
+            notice.showAtPause(stillWanted: { [weak self] in
+                guard let self = self, !self.armed, self.taking == nil else { return false }
+                return self.offers.contains { $0["id"] as? String == id }
+            }) { [weak self] in
+                self?.notice.show(title, sub, symbol: felt ? "hand.tap.fill" : "hand.tap", key: receiveKey,
+                                  hideAfter: 7, onClick: { self?.receive(id) })
+            }
+        }
+    }
+
     func received(_ e: [String: Any]) {
+        disarm()
+        taking = nil
+        overlay.hide()
         let who = e["sender"] as? String ?? "someone"
         let items = e["items"] as? [[String: Any]] ?? []
-        NSSound(named: "Glass")?.play()
-        var title = "From \(who)", body = ""
+        var title = "From \(who)", sub = "", symbol = "checkmark.circle.fill"
+        var open: String?
         if let first = items.first, let kind = first["clipboard"] as? String, first["copied"] as? Bool == true {
             switch kind {
             case "text":
-                body = "“\(first["preview"] as? String ?? "")”"
-                title = "Copied text from \(who) — ⌘V to paste"
-                recents.insert(Recent(title: "Text from \(who): \(body)", path: nil), at: 0)
+                let preview = first["preview"] as? String ?? ""
+                title = "Copied \(who)'s text"
+                sub = "⌘V to paste · “\(preview)”"
+                symbol = "doc.on.clipboard.fill"
+                recents.insert(Recent(title: "Text from \(who): “\(preview)”", path: nil), at: 0)
             case "image":
-                title = "Copied image from \(who) — ⌘V to paste"
+                title = "Copied \(who)'s image"
+                sub = "⌘V to paste"
+                symbol = "photo.fill"
                 recents.insert(Recent(title: "Image from \(who) (copied)", path: nil), at: 0)
             default:
                 let names = items.compactMap { $0["name"] as? String }
-                title = "Copied \(names.count) file\(names.count == 1 ? "" : "s") from \(who) — ⌘V in Finder"
-                body = names.joined(separator: ", ")
+                title = "Copied \(names.count) file\(names.count == 1 ? "" : "s") from \(who)"
+                sub = "⌘V in Finder · " + names.joined(separator: ", ")
+                open = items.first?["path"] as? String
                 for it in items { recents.insert(Recent(title: it["name"] as? String ?? "file", path: it["path"] as? String), at: 0) }
             }
         } else {
             let names = items.compactMap { $0["name"] as? String }
-            title = "Received \(names.count) file\(names.count == 1 ? "" : "s") from \(who)"
-            body = names.joined(separator: ", ") + " — in Downloads"
+            title = "Got \(names.count) file\(names.count == 1 ? "" : "s") from \(who)"
+            sub = "In Downloads · " + names.joined(separator: ", ")
+            symbol = "arrow.down.circle.fill"
+            open = items.first?["path"] as? String
             for it in items { recents.insert(Recent(title: it["name"] as? String ?? "file", path: it["path"] as? String), at: 0) }
         }
         recents = Array(recents.prefix(6))
-        overlay.show("✓ " + title, sub: body, hideAfter: 4)
-        notify(title, body)
+        notice.show(title, sub, symbol: symbol, hideAfter: 5, onClick: open.map { p in
+            { NSWorkspace.shared.activateFileViewerSelecting([URL(fileURLWithPath: p)]) }
+        })
     }
 
-    func offerSummary() -> String {
-        guard let o = offers.first else { return "" }
-        return "\(o["from"] as? String ?? "?")'s rhythm (\(o["knocks"] as? Int ?? 0) knocks)"
-    }
-
-    // MARK: receive with the keyboard (⌃⌥K)
-
-    func tapToReceive() {
-        guard let agent = agent else {
-            notify("Knockdrop", "Turn on “Receive by Knocking” first")
+    func patternResult(_ e: [String: Any]) {
+        let result = e["result"] as? String ?? ""
+        let via = e["via"] as? String ?? ""
+        if via == "table" {   // the felt rhythm didn't work out: knock it instead
+            guard taking != nil else { return }
+            taking = nil
+            overlay.hide()
+            arm(note: result == "no_match" ? "What your table felt didn't match" : nil)
             return
         }
-        receivingKeys = true
-        agent.send(["cmd": "keys", "on": true])
-        let who = offers.isEmpty ? "the sender's rhythm" : offerSummary()
-        overlay.capture(title: "Tap \(who)", prompt: "on the space bar · Esc to cancel",
-                        onCaptured: { [weak self] times in
-                            self?.receivingKeys = false
-                            self?.agent?.send(["cmd": "pattern", "times": times])
-                        },
-                        onCancel: { [weak self] in
-                            self?.receivingKeys = false
-                            self?.agent?.send(["cmd": "keys", "on": false])
-                        })
+        guard armed else { return }
+        switch result {
+        case "no_match":
+            overlay.retry("Didn't match")
+        case "no_offer":
+            let counts = (e["offer_knocks"] as? [Int] ?? []).map(String.init).joined(separator: " or ")
+            overlay.retry("You knocked \(e["knocks"] as? Int ?? 0), they knocked \(counts.isEmpty ? "?" : counts)")
+        default:   // a stray bump or two: start over quietly
+            overlay.retry(nil)
+        }
     }
 
-    // MARK: share
+    // MARK: receive (⌃⌥K, a click on the notice, or the menu)
+
+    /// One key does the right thing: take what was knocked on your table, otherwise open the
+    /// knock overlay. Nothing is received without this.
+    func receive(_ id: String? = nil) {
+        guard let agent = agent else {
+            notice.show("Receiving is off", "Turn on “Receive by Knocking” in the menu", symbol: "hand.raised.slash")
+            return
+        }
+        if armed || taking != nil { return }
+        notice.hide()
+        if offers.isEmpty {
+            notice.show("No one nearby is sharing", "When someone shares, you'll see it here", symbol: "hand.raised")
+            return
+        }
+        let target = offers.first { $0["id"] as? String == id } ?? offers.first { $0["felt"] as? Bool == true }
+        if let o = target, o["felt"] as? Bool == true, let oid = o["id"] as? String {
+            taking = oid
+            overlay.show("Taking \(who(o))'s \(what(o))…", sub: "Knocked on your table", hideAfter: 10)
+            agent.send(["cmd": "take", "id": oid])
+            return
+        }
+        arm(for: target)
+    }
+
+    func arm(for target: [String: Any]? = nil, note: String? = nil) {
+        guard let agent = agent, !armed else { return }
+        guard !offers.isEmpty else {
+            notice.show("No one nearby is sharing", "When someone shares, you'll see it here", symbol: "hand.raised")
+            return
+        }
+        let o = target ?? offers.first
+        armed = true
+        sensorReady = false
+        agent.send(["cmd": "arm", "on": true])
+        let n = offers.allSatisfy { $0["knocks"] as? Int == o?["knocks"] as? Int } ? (o?["knocks"] as? Int ?? 0) : 0
+        let title = o.map { "Knock \(who($0))'s rhythm" } ?? "Knock the sharer's rhythm"
+        overlay.capture(title: title, prompt: armPrompt(), expected: n,
+                        onFirstTap: { [weak self] in self?.agent?.send(["cmd": "keys", "on": true]) },
+                        onCaptured: { [weak self] times in
+                            self?.overlay.setChecking("Checking the rhythm…")
+                            self?.agent?.send(["cmd": "pattern", "times": times])
+                        },
+                        onCancel: { [weak self] in self?.disarm() })
+        if let note = note { overlay.retry(note) }
+        updateIcon()
+    }
+
+    func armPrompt() -> String {
+        if !hasSensor { return "Tap it on the space bar · Esc cancels" }
+        return sensorReady ? "Knock on your Mac, or tap the space bar · Esc cancels"
+                           : "Hands still a sec… or tap the space bar · Esc cancels"
+    }
+
+    func disarm(tellAgent: Bool = true) {
+        guard armed else { return }
+        armed = false
+        overlay.endCapture()
+        if tellAgent { agent?.send(["cmd": "arm", "on": false]) }
+        updateIcon()
+    }
+
+    // MARK: share (⌃⌥C shares, ⌃⌥C again stops)
+
+    func shareOrStop() {
+        if sender != nil { stopShare() } else { shareClipboard() }
+    }
 
     func shareClipboard() { startShare(files: []) }
 
@@ -495,16 +827,15 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func startShare(files: [String]) {
-        guard !command.isEmpty else { return }
-        if sender != nil {
-            overlay.show("Already sharing", sub: "Stop the current share from the menu first", hideAfter: 3)
-            return
-        }
+        guard !command.isEmpty, sender == nil else { return }
         if hasSensor {
             launchSender(pattern: nil, files: files)
         } else {
-            overlay.capture(title: "Tap a rhythm to share with", prompt: "on the space bar · Esc to cancel",
-                            onCaptured: { [weak self] t in self?.launchSender(pattern: t, files: files) },
+            overlay.capture(title: "Tap a rhythm to share with", prompt: "On the space bar · Esc cancels",
+                            onCaptured: { [weak self] t in
+                                self?.overlay.endCapture()
+                                self?.launchSender(pattern: t, files: files)
+                            },
                             onCancel: {})
         }
     }
@@ -516,12 +847,16 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         let p = KDProcess(command: command, args: args, log: log)
         sharedWith = []
         shareRhythm = nil
+        shareEnds = nil
         shareInfo = "Starting…"
         p.onEvent = { [weak self] e in self?.senderEvent(e) }
         p.onExit = { [weak self] _ in
             guard let self = self else { return }
             self.sender = nil
             self.shareInfo = nil
+            self.shareEnds = nil
+            self.tick?.invalidate()
+            self.overlay.hide()
             self.updateIcon()
         }
         if p.start() { sender = p } else { shareInfo = nil }
@@ -529,8 +864,21 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc func stopShare() {
+        guard let s = sender else { return }
+        let got = sharedWith.count
+        s.stop()
+        overlay.hide()
+        notice.show("Stopped sharing", got == 0 ? "No one took it" : "\(got) got it: " + sharedWith.joined(separator: ", "),
+                    symbol: "stop.circle.fill", hideAfter: 3)
+    }
+
+    func walkedAway(_ how: String) {
+        disarm()
+        guard sender != nil else { return }
+        logLine("stopping the share: Mac \(how)")
         sender?.stop()
         overlay.hide()
+        notify("Knockdrop stopped sharing", "Your Mac \(how), so your share ended")
     }
 
     func senderEvent(_ e: [String: Any]) {
@@ -538,39 +886,42 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         case "sharing":
             shareInfo = "Sharing \(e["what"] as? String ?? "")"
         case "calibrating":
-            overlay.show("Hands off for a second…", sub: shareInfo ?? "")
+            overlay.show("Hands off for a second…", sub: "\(shareKey) again cancels")
         case "knock_now":
-            NSSound(named: "Pop")?.play()
             overlay.show("Knock a rhythm on the table", dots: "· · ·",
-                         sub: "Teammates at your table get it automatically", hideAfter: 30)
+                         sub: "Mix short and long gaps · \(shareKey) again cancels", hideAfter: 30)
         case "knock":
-            NSSound(named: "Tink")?.play()
             overlay.show("Knock a rhythm on the table", dots: dotString(e["n"] as? Int ?? 1),
-                         sub: "Mix short and long gaps", hideAfter: 30)
+                         sub: "Mix short and long gaps · \(shareKey) again cancels", hideAfter: 30)
         case "pattern_rejected":
-            NSSound(named: "Funk")?.play()
             overlay.show("Knock again", dots: "· · ·", sub: e["reason"] as? String ?? "", hideAfter: 30)
         case "waiting":
             let times = e["times"] as? [Double] ?? []
             shareRhythm = rhythmString(times)
-            shareInfo = (shareInfo ?? "Sharing") + " — waiting"
-            NSSound(named: "Pop")?.play()
-            overlay.show("Shared for 5 minutes", dots: shareRhythm ?? "",
-                         sub: "Your table gets it automatically. Anyone else: knock this rhythm.", hideAfter: 6)
-            notify("Shared — knock \(shareRhythm ?? "")", "Others on your Wi-Fi can knock this rhythm to get it")
+            shareEnds = Date().addingTimeInterval(e["expires_in"] as? Double ?? 300)
+            overlay.hide()
+            notice.show("Sharing for 5 min · \(shareRhythm ?? "")",
+                        "Others knock this rhythm · \(shareKey) or click to stop",
+                        symbol: "dot.radiowaves.left.and.right", key: shareKey, hideAfter: 6,
+                        onClick: { [weak self] in self?.stopShare() })
+            tick?.invalidate()
+            tick = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in self?.updateIcon() }
         case "sent":
             let who = e["who"] as? String ?? "someone"
             sharedWith.append(who)
-            NSSound(named: "Glass")?.play()
-            overlay.show("✓ \(who) got it", sub: "Still sharing — stop from the menu bar", hideAfter: 3)
+            notice.show("\(who) got it", "Still sharing · \(shareKey) or click to stop", symbol: "checkmark.circle.fill",
+                        key: shareKey, hideAfter: 4, onClick: { [weak self] in self?.stopShare() })
         case "wrong":
             logLine("share: \(e["who"] as? String ?? "?") knocked a different rhythm")
         case "expired", "closed":
-            notify("Knockdrop", "Your share \(e["event"] as? String == "expired" ? "expired" : "closed")")
+            let expired = e["event"] as? String == "expired"
+            notice.show(expired ? "Your share expired" : "Your share closed",
+                        expired ? (sharedWith.isEmpty ? "No one took it" : "\(sharedWith.count) got it")
+                                : (e["reason"] as? String ?? ""), symbol: "clock")
         case "error":
             let msg = e["message"] as? String ?? "Couldn't share"
-            NSSound(named: "Basso")?.play()
-            overlay.show(msg, hideAfter: 4)
+            overlay.hide()
+            notice.show(msg, "", symbol: "exclamationmark.triangle.fill")
         default:
             break
         }
@@ -581,6 +932,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
+        notice.hide()
         let head = NSMenuItem(title: "Knockdrop" + (version.isEmpty ? "" : " \(version)"), action: nil, keyEquivalent: "")
         head.isEnabled = false
         menu.addItem(head)
@@ -589,29 +941,42 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         menu.addItem(.separator())
 
-        menu.addItem(item("Receive by Knocking", #selector(toggleReceive), state: receiveOn))
-        menu.addItem(info(receiveOn ? agentInfo : "Off — nothing is listening"))
-        if hasSensor {
-            menu.addItem(item("Auto-receive from My Table", #selector(toggleTable), state: tableOn, enabled: receiveOn))
-            menu.addItem(info("Get what's knocked on your table, hands-free (uses the motion sensor continuously)"))
-        }
-        let keys = item("Tap Rhythm on Keyboard…", #selector(tapToReceiveAction), enabled: agent != nil)
-        keys.keyEquivalent = "k"
-        keys.keyEquivalentModifierMask = [.control, .option]
-        menu.addItem(keys)
-        menu.addItem(.separator())
-
         if let s = shareInfo {
-            menu.addItem(info(s))
+            menu.addItem(info(s + (shareEnds.map { " · ends in \(clock($0))" } ?? "")))
             if let r = shareRhythm { menu.addItem(info("Rhythm: \(r)")) }
             if !sharedWith.isEmpty { menu.addItem(info("Got it: " + sharedWith.joined(separator: ", "))) }
-            menu.addItem(item("Stop Sharing", #selector(stopShare)))
+            let stop = item("Stop Sharing", #selector(stopShare))
+            stop.keyEquivalent = "c"
+            stop.keyEquivalentModifierMask = [.control, .option]
+            menu.addItem(stop)
         } else {
             let clip = item("Share Clipboard", #selector(shareClipboardAction))
             clip.keyEquivalent = "c"
             clip.keyEquivalentModifierMask = [.control, .option]
             menu.addItem(clip)
             menu.addItem(item("Share Files…", #selector(shareFiles)))
+        }
+        menu.addItem(.separator())
+
+        if receiveOn {
+            if offers.isEmpty {
+                menu.addItem(info(agentInfo))
+            } else {
+                menu.addItem(info("Nearby — click to receive"))
+                for o in offers {
+                    let felt = o["felt"] as? Bool == true
+                    let it = item("\(offerTitle(o))" + (felt ? " · knocked on your table" : ""), #selector(receiveOffer(_:)))
+                    it.representedObject = o["id"] as? String
+                    it.image = NSImage(systemSymbolName: felt ? "hand.tap.fill" : "hand.tap", accessibilityDescription: nil)
+                    menu.addItem(it)
+                }
+            }
+            let rcv = item("Receive…", #selector(receiveAction), enabled: agent != nil)
+            rcv.keyEquivalent = "k"
+            rcv.keyEquivalentModifierMask = [.control, .option]
+            menu.addItem(rcv)
+        } else {
+            menu.addItem(info("Receiving is off"))
         }
 
         if !recents.isEmpty {
@@ -624,6 +989,11 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             }
         }
         menu.addItem(.separator())
+        menu.addItem(item("Receive by Knocking", #selector(toggleReceive), state: receiveOn))
+        if hasSensor {
+            menu.addItem(item("Notice Knocks on My Table", #selector(toggleTable), state: tableOn, enabled: receiveOn))
+            menu.addItem(info("Offers knocked on your table: \(receiveKey) takes them, no knocking"))
+        }
         menu.addItem(item("Open Downloads", #selector(openDownloads)))
         menu.addItem(item("Open at Login", #selector(toggleLogin), state: FileManager.default.fileExists(atPath: loginURL.path)))
         menu.addItem(item("Quit Knockdrop", #selector(quit), key: "q"))
@@ -655,7 +1025,8 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if receiveOn { restartAgent() }
     }
 
-    @objc func tapToReceiveAction() { tapToReceive() }
+    @objc func receiveAction() { receive() }
+    @objc func receiveOffer(_ sender: NSMenuItem) { receive(sender.representedObject as? String) }
     @objc func shareClipboardAction() { shareClipboard() }
 
     @objc func openRecent(_ sender: NSMenuItem) {
@@ -697,18 +1068,32 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
 
     // MARK: helpers
 
+    /// The menu bar is the ambient display: a live countdown while you share, the tap count
+    /// while someone nearby shares. Glanceable, never in the way.
     func updateIcon() {
         guard let button = statusItem?.button else { return }
-        let active = sender != nil || !offers.isEmpty
-        let name = active ? "hand.tap.fill" : "hand.tap"
+        let active = sender != nil || !offers.isEmpty || armed
+        let name = sender != nil ? "dot.radiowaves.left.and.right" : (active ? "hand.tap.fill" : "hand.tap")
         if let img = NSImage(systemSymbolName: name, accessibilityDescription: "Knockdrop")
             ?? NSImage(systemSymbolName: active ? "hand.raised.fill" : "hand.raised", accessibilityDescription: "Knockdrop") {
             img.isTemplate = true
             button.image = img
-            button.title = ""
-        } else {
-            button.title = "👊"
+            button.imagePosition = .imageLeading
         }
+        var badge = ""
+        if let end = shareEnds, sender != nil {
+            badge = clock(end) + (sharedWith.isEmpty ? "" : " ✓\(sharedWith.count)")
+        } else if sender != nil {
+            badge = "…"
+        } else if let o = offers.first {
+            badge = "\(o["knocks"] as? Int ?? 0)"
+        }
+        button.attributedTitle = NSAttributedString(string: badge.isEmpty ? "" : " " + badge, attributes: [
+            .font: NSFont.monospacedDigitSystemFont(ofSize: 12, weight: .medium),
+            .baselineOffset: 0.5,
+        ])
+        button.toolTip = sender != nil ? (shareInfo ?? "Sharing") + " · \(shareKey) stops"
+            : offers.first.map { offerTitle($0) + " · \(receiveKey) to receive" } ?? "Knockdrop"
         button.appearsDisabled = !receiveOn && sender == nil
     }
 
@@ -718,6 +1103,15 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         p.arguments = ["-e", "on run argv", "-e", "display notification (item 2 of argv) with title (item 1 of argv)",
                        "-e", "end run", title, body]
         try? p.run()
+    }
+
+    func who(_ o: [String: Any]) -> String { o["from"] as? String ?? "Someone" }
+    func what(_ o: [String: Any]) -> String { o["label"] as? String ?? "something" }
+    func offerTitle(_ o: [String: Any]) -> String { "\(who(o)) · \(what(o)) · \(o["knocks"] as? Int ?? 0) knocks" }
+
+    func clock(_ end: Date) -> String {
+        let s = max(0, Int(end.timeIntervalSinceNow.rounded()))
+        return String(format: "%d:%02d", s / 60, s % 60)
     }
 
     func dotString(_ n: Int) -> String {
@@ -735,6 +1129,10 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     func trim(_ s: String, _ n: Int) -> String { s.count <= n ? s : String(s.prefix(n - 1)) + "…" }
+}
+
+extension String {
+    var capitalizedFirst: String { prefix(1).uppercased() + dropFirst() }
 }
 
 let app = NSApplication.shared
