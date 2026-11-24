@@ -498,6 +498,11 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     var tick: Timer?
     var recents: [Recent] = []
 
+    var installSig: String?                // knockdrop's files when we started; brew upgrade changes them
+    var seenSig: String?
+    var triedSig: String?                  // one automatic update per version, so a failed build can't loop
+    var updatePending = false
+
     var receiveOn: Bool {
         get { defaults.bool(forKey: "receiveEnabled") }
         set { defaults.set(newValue, forKey: "receiveEnabled") }
@@ -537,6 +542,10 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
                                                             queue: .main) { [weak self] _ in self?.walkedAway("locked") }
         NSWorkspace.shared.notificationCenter.addObserver(forName: NSWorkspace.willSleepNotification, object: nil,
                                                           queue: .main) { [weak self] _ in self?.walkedAway("went to sleep") }
+
+        installSig = installSignature()
+        seenSig = installSig
+        Timer.scheduledTimer(withTimeInterval: 20, repeats: true) { [weak self] _ in self?.checkInstall() }
 
         if command.isEmpty {
             agentInfo = "Can't find knockdrop — run `knockdrop menubar` again"
@@ -621,6 +630,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             hasSensor = e["sensor"] as? Bool ?? true
             appStale = e["app_stale"] as? Bool ?? false
             agentRestarts = 0
+            if appStale { applyUpdate() }   // e.g. first login after a brew upgrade
         case "status":
             offers = e["offers"] as? [[String: Any]] ?? []
             if offers.isEmpty {
@@ -804,6 +814,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         overlay.endCapture()
         if tellAgent { agent?.send(["cmd": "arm", "on": false]) }
         updateIcon()
+        if updatePending { DispatchQueue.main.async { self.applyUpdate() } }
     }
 
     // MARK: share (⌃⌥C shares, ⌃⌥C again stops)
@@ -858,6 +869,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             self.tick?.invalidate()
             self.overlay.hide()
             self.updateIcon()
+            if self.updatePending { self.applyUpdate() }
         }
         if p.start() { sender = p } else { shareInfo = nil }
         updateIcon()
@@ -1047,6 +1059,59 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     }
 
     @objc func quit() { NSApp.terminate(nil) }
+
+    // MARK: updates
+
+    /// `brew upgrade` swaps the files under us but can't touch running programs, so this app and
+    /// its receiver kept running the old version until the next login. Watch knockdrop's files
+    /// (what the `knockdrop` command resolves to, plus the app source) and follow them.
+    func installSignature() -> String? {
+        guard let last = command.last else { return nil }
+        let real = URL(fileURLWithPath: last).resolvingSymlinksInPath()
+        let dir = real.deletingLastPathComponent()   // the `knockdrop` launcher or knockdrop.py: both sit next to the rest
+        var parts: [String] = []
+        for f in ["knockdrop.py", "menubar/Knockdrop.swift"] {
+            let path = dir.appendingPathComponent(f).path
+            guard let a = try? FileManager.default.attributesOfItem(atPath: path),
+                  let m = a[.modificationDate] as? Date else { return nil }   // missing: mid-upgrade, look again later
+            parts.append("\(path)|\(m.timeIntervalSince1970)|\((a[.size] as? Int) ?? 0)")
+        }
+        return parts.joined(separator: ";")
+    }
+
+    func checkInstall() {
+        guard let sig = installSignature() else { return }
+        defer { seenSig = sig }
+        // act once the new files have sat still for a whole check, not halfway through the upgrade
+        if sig != installSig && sig == seenSig { applyUpdate() }
+    }
+
+    /// Runs `knockdrop menubar` with the installed knockdrop: if the app is out of date it rebuilds
+    /// it, quits this copy and opens the new one. If we're still here afterwards, only the CLI
+    /// changed: restart the receiver so it runs the new code. Waits while you share or receive.
+    func applyUpdate() {
+        guard !command.isEmpty else { return }
+        if sender != nil || armed || taking != nil { updatePending = true; return }
+        updatePending = false
+        let sig = installSignature()
+        if sig != nil && sig == triedSig { return }
+        triedSig = sig
+        logLine("knockdrop changed on disk; updating")
+        let p = Process()
+        p.executableURL = URL(fileURLWithPath: command[0])
+        p.arguments = Array(command.dropFirst()) + ["menubar"]
+        p.standardOutput = log ?? FileHandle.nullDevice
+        p.standardError = log ?? FileHandle.nullDevice
+        p.terminationHandler = { [weak self] proc in
+            DispatchQueue.main.async {
+                guard let self = self else { return }
+                self.logLine("update finished (\(proc.terminationStatus)); restarting the receiver")
+                self.installSig = sig
+                if self.receiveOn { self.restartAgent() }
+            }
+        }
+        do { try p.run() } catch { logLine("couldn't run knockdrop to update: \(error)") }
+    }
 
     func setLogin(_ on: Bool) {
         if on {

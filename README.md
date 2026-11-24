@@ -65,7 +65,7 @@ A share from the menu bar stays open for 5 minutes, and the menu bar shows the t
 
 - The app is built on your Mac from `menubar/Knockdrop.swift` with the Command Line Tools (a few seconds) and installed as `~/Applications/Knockdrop.app`. The first time, macOS asks to allow **Knockdrop** on the local network. Allow it.
 - The receiver keeps the motion sensor off until you press ⌃⌥K. *Notice Knocks on My Table* keeps it on, which costs about 3% of one CPU core.
-- If the menu shows **Restart to Finish Updating** after a `brew upgrade`, click it, or run `knockdrop menubar` again.
+- After `brew upgrade`, the app updates itself within a minute: it rebuilds and restarts once you aren't sharing or receiving. If that fails, the menu shows **Restart to Finish Updating**, or run `knockdrop menubar` again.
 - Log: `~/Library/Logs/Knockdrop.log`. Remove the app and its login item with `knockdrop menubar --remove`.
 
 </details>
