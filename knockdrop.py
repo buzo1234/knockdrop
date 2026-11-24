@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """knockdrop -- share files between Macs on the same Wi-Fi by knocking the same rhythm.
 
-    ./knockdrop send FILE [FILE ...]     knock a rhythm, wait for someone to repeat it
-    ./knockdrop receive                  knock the sender's rhythm to get the files
-    ./knockdrop knock                    just print detected knock patterns (tuning)
-    ./knockdrop check                    check the sensor and network on this Mac
+    knockdrop send FILE [FILE ...]     knock a rhythm, wait for someone to repeat it
+    knockdrop receive                  knock the sender's rhythm to get the files
+    knockdrop knock                    practice knocking and check that two rhythms match
+    knockdrop check                    check the sensor and network on this Mac
 
 Knocks are read from the motion sensor (accelerometer + gyroscope). Macs without
 it (M1, Intel) automatically use the space bar instead; --keys forces that.
+
+Update with `brew upgrade knockdrop`. Docs: https://github.com/buzo1234/knockdrop
 """
 __version__ = "dev"  # set by the Homebrew formula on release
 
@@ -676,24 +678,25 @@ def cmd_check():
 
 def main():
     multiprocessing.freeze_support()
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(prog="knockdrop", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--version", action="version", version=f"knockdrop {__version__}")
     ap.add_argument("--keys", action="store_true", help="tap the space bar instead of knocking")
-    ap.add_argument("--sensitivity", type=float, default=10.0,
+    ap.add_argument("--sensitivity", type=float, default=10.0, metavar="N",
                     help="knock threshold in noise units; lower = more sensitive (default 10)")
-    ap.add_argument("--tolerance", type=float, default=0.12,
+    ap.add_argument("--tolerance", type=float, default=0.12, metavar="F",
                     help="max rhythm difference, as a fraction of pattern length (default 0.12)")
     ap.add_argument("--pattern", type=lambda s: [float(x) for x in s.split(",")],
                     help=argparse.SUPPRESS)  # knock times in seconds, for scripted tests
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("send", help="offer files behind a knock rhythm")
-    s.add_argument("files", nargs="+")
+    s.add_argument("files", nargs="+", metavar="FILE", help="files to share")
     s.add_argument("--multi", action="store_true", help="keep sharing after the first receiver")
     s.add_argument("-y", "--yes", action="store_true", help="don't ask to confirm the rhythm")
     r = sub.add_parser("receive", help="knock a rhythm to receive files")
-    r.add_argument("--out", default=os.path.join("~" + os.environ.get("SUDO_USER", ""), "Downloads"))
+    r.add_argument("--out", default=os.path.join("~" + os.environ.get("SUDO_USER", ""), "Downloads"),
+                   metavar="DIR", help="where to save received files (default ~/Downloads)")
     r.add_argument("--stay", action="store_true", help="keep receiving after the first transfer")
-    sub.add_parser("knock", help="print detected knock patterns (to tune sensitivity)")
+    sub.add_parser("knock", help="practice knocking and check that two rhythms match")
     sub.add_parser("check", help="check the sensor and network on this Mac")
     args = ap.parse_args()
 
