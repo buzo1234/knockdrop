@@ -9,6 +9,8 @@
 Knocks are read from the motion sensor (accelerometer + gyroscope). Macs without
 it (M1, Intel) automatically use the space bar instead; --keys forces that.
 """
+__version__ = "dev"  # set by the Homebrew formula on release
+
 import argparse
 import errno
 import hashlib
@@ -675,6 +677,7 @@ def cmd_check():
 def main():
     multiprocessing.freeze_support()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap.add_argument("--version", action="version", version=f"knockdrop {__version__}")
     ap.add_argument("--keys", action="store_true", help="tap the space bar instead of knocking")
     ap.add_argument("--sensitivity", type=float, default=10.0,
                     help="knock threshold in noise units; lower = more sensitive (default 10)")

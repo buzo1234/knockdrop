@@ -21,14 +21,25 @@ Bump-style file sharing between Macs on the same Wi-Fi, using the hidden motion 
 ## Install
 
 ```sh
-git clone https://github.com/buzo1234/knockdrop ~/.knockdrop
-sudo mkdir -p /usr/local/bin && sudo ln -sf ~/.knockdrop/knockdrop /usr/local/bin/knockdrop
+brew install buzo1234/tap/knockdrop
 knockdrop check
 ```
 
-**Update:** `git -C ~/.knockdrop pull`
+**Update:** `brew upgrade knockdrop`
 
-It runs on the Python that ships with macOS (`/usr/bin/python3`), so there's nothing else to install. If macOS asks you to install the Command Line Tools the first time, say yes.
+It runs on the Python that ships with macOS, so Homebrew installs nothing else alongside it.
+
+<details>
+<summary>Without Homebrew</summary>
+
+```sh
+git clone https://github.com/buzo1234/knockdrop ~/.knockdrop
+sudo mkdir -p /usr/local/bin && sudo ln -sf ~/.knockdrop/knockdrop /usr/local/bin/knockdrop
+```
+
+Update with `git -C ~/.knockdrop pull`. If macOS asks you to install the Command Line Tools the first time, say yes.
+
+</details>
 
 ## Use it
 
@@ -129,8 +140,10 @@ knockdrop.py      the whole app: knock detection, discovery, transfer
 macimu/           vendored sensor library (MIT, see macimu/LICENSE)
 eval/             record labelled knock clips and score detectors offline
 build.sh          standalone universal .zip via PyInstaller (no Python needed)
-packaging/        installer and README for that .zip
+packaging/        installer and README for that .zip, Homebrew formula template
 ```
+
+**Releases are automatic.** Every push to `main` that changes the app (`knockdrop.py`, `knockdrop`, `macimu/`) bumps the patch version. It tags `vX.Y.Z`, publishes a GitHub release, installs the new formula with Homebrew on a macOS runner, and only then pushes it to [buzo1234/homebrew-tap](https://github.com/buzo1234/homebrew-tap). For a minor or major bump, run the **release** workflow by hand from the Actions tab.
 
 To try send and receive on one Mac without knocking, script the knock times:
 

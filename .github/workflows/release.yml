@@ -1,0 +1,115 @@
+# Every push to main that changes the app ships a new version:
+#   smoke test -> tag vX.Y.Z -> GitHub release with a source tarball
+#   -> install the new formula with Homebrew -> push it to buzo1234/homebrew-tap.
+# README/eval-only pushes don't release. Run it by hand (Actions tab) to bump minor/major.
+name: release
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - knockdrop
+      - knockdrop.py
+      - macimu/**
+      - packaging/homebrew-formula.sh
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: Version part to bump
+        type: choice
+        options: [patch, minor, major]
+        default: patch
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: macos-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+      HOMEBREW_NO_AUTO_UPDATE: "1"
+      HOMEBREW_NO_ANALYTICS: "1"
+      HOMEBREW_NO_INSTALL_CLEANUP: "1"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Smoke test (macOS system Python)
+        run: |
+          /usr/bin/python3 -m py_compile knockdrop.py macimu/*.py
+          ./knockdrop --help > /dev/null
+          ./knockdrop --version
+
+      - name: Next version
+        id: version
+        env:
+          BUMP: ${{ inputs.bump || 'patch' }}
+        run: |
+          if [ -n "$(git tag --points-at HEAD 'v*')" ]; then
+            echo "HEAD is already released: $(git tag --points-at HEAD 'v*')"
+            echo "skip=true" >> "$GITHUB_OUTPUT"; exit 0
+          fi
+          last="$(git tag -l 'v*' --sort=-v:refname | head -1)"
+          if [ -z "$last" ]; then
+            next=0.1.0
+          else
+            IFS=. read -r ma mi pa <<< "${last#v}"
+            case "$BUMP" in
+              major) next="$((ma + 1)).0.0" ;;
+              minor) next="$ma.$((mi + 1)).0" ;;
+              *)     next="$ma.$mi.$((pa + 1))" ;;
+            esac
+          fi
+          echo "releasing v$next (previous: ${last:-none})"
+          echo "version=$next" >> "$GITHUB_OUTPUT"
+
+      - name: Tag and publish release
+        if: steps.version.outputs.skip != 'true'
+        env:
+          V: ${{ steps.version.outputs.version }}
+        run: |
+          git archive --format=tar.gz --prefix="knockdrop-$V/" -o "knockdrop-$V.tar.gz" HEAD \
+            knockdrop knockdrop.py macimu LICENSE README.md
+          gh release create "v$V" "knockdrop-$V.tar.gz" --target "$GITHUB_SHA" \
+            --title "knockdrop $V" --generate-notes
+          echo "SHA256=$(shasum -a 256 "knockdrop-$V.tar.gz" | cut -d' ' -f1)" >> "$GITHUB_ENV"
+
+      - name: Install the new formula with Homebrew
+        if: steps.version.outputs.skip != 'true'
+        env:
+          V: ${{ steps.version.outputs.version }}
+          TAP_DEPLOY_KEY: ${{ secrets.TAP_DEPLOY_KEY }}
+        run: |
+          install -m 600 /dev/null "$RUNNER_TEMP/tap_key"
+          printf '%s\n' "$TAP_DEPLOY_KEY" > "$RUNNER_TEMP/tap_key"
+          export GIT_SSH_COMMAND="ssh -i $RUNNER_TEMP/tap_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+          git clone -q git@github.com:buzo1234/homebrew-tap.git tap
+          packaging/homebrew-formula.sh "$V" "$SHA256" > tap/Formula/knockdrop.rb
+          git -C tap add Formula/knockdrop.rb
+          git -C tap -c user.name="github-actions[bot]" \
+            -c user.email="41898282+github-actions[bot]@users.noreply.github.com" \
+            commit -qm "knockdrop $V"
+          # install from the local clone before publishing, so a broken formula never ships
+          brew tap buzo1234/tap "$PWD/tap"
+          brew install buzo1234/tap/knockdrop
+          test "$(knockdrop --version)" = "knockdrop $V"
+
+      - name: Publish formula to the tap
+        if: steps.version.outputs.skip != 'true'
+        env:
+          V: ${{ steps.version.outputs.version }}
+        run: |
+          export GIT_SSH_COMMAND="ssh -i $RUNNER_TEMP/tap_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+          git -C tap push -q origin main
+          echo "### knockdrop $V released" >> "$GITHUB_STEP_SUMMARY"
+          echo '`brew upgrade knockdrop`' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Remove key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/tap_key"
