@@ -108,7 +108,7 @@ jobs:
           export GIT_SSH_COMMAND="ssh -i $RUNNER_TEMP/tap_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
           git -C tap push -q origin main
           echo "### knockdrop $V released" >> "$GITHUB_STEP_SUMMARY"
-          echo '`brew upgrade knockdrop`' >> "$GITHUB_STEP_SUMMARY"
+          echo '`brew update && brew upgrade knockdrop`' >> "$GITHUB_STEP_SUMMARY"
 
       - name: Remove key
         if: always()

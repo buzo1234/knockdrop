@@ -25,7 +25,9 @@ brew install buzo1234/tap/knockdrop
 knockdrop check
 ```
 
-**Update:** `brew upgrade knockdrop`
+**Update:** `brew update && brew upgrade knockdrop`
+
+`brew update` makes Homebrew check the tap for a new version right away. Without it, Homebrew only checks about once a day, so `brew upgrade` alone can miss a fresh release.
 
 It runs on the Python that ships with macOS, so Homebrew installs nothing else alongside it.
 

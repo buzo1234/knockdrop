@@ -1,6 +1,6 @@
 knockdrop -- share files between Macs on the same Wi-Fi by knocking the same rhythm.
 
-HAVE HOMEBREW? Use that instead -- updates are just `brew upgrade knockdrop`:
+HAVE HOMEBREW? Use that instead -- updates are `brew update && brew upgrade knockdrop`:
   brew install buzo1234/tap/knockdrop
   (If you installed this zip before, uninstall it first -- see the bottom -- so you
   don't end up with two different `knockdrop` commands.)

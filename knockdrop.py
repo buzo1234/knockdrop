@@ -9,7 +9,7 @@
 Knocks are read from the motion sensor (accelerometer + gyroscope). Macs without
 it (M1, Intel) automatically use the space bar instead; --keys forces that.
 
-Update with `brew upgrade knockdrop`. Docs: https://github.com/buzo1234/knockdrop
+Update with `brew update && brew upgrade knockdrop`. Docs: https://github.com/buzo1234/knockdrop
 """
 __version__ = "dev"  # set by the Homebrew formula on release
 
