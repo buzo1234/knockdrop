@@ -1,4 +1,4 @@
-// Knockdrop menu bar app. Built on each Mac by `knockdrop menubar` with the Command Line Tools'
+// KnockDrop menu bar app. Built on each Mac by `knockdrop menubar` with the Command Line Tools'
 // swiftc, so it needs no signing or Xcode project. All knock detection and networking stays in
 // knockdrop.py; this app runs `knockdrop agent` (background receiver) and `knockdrop send --events`
 // (sharing) and turns their JSON event lines into a menu, a notice and an overlay. It plays no sounds.
@@ -520,7 +520,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         command = (Bundle.main.object(forInfoDictionaryKey: "KDCommand") as? [String]) ?? []
         openLog()
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        statusItem.button?.toolTip = "Knockdrop"
+        statusItem.button?.toolTip = "KnockDrop"
         menu.delegate = self
         statusItem.menu = menu
         notice.anchor = { [weak self] in
@@ -530,6 +530,8 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         if !defaults.bool(forKey: "loginConfigured") {   // first run: start at login (toggle in the menu)
             setLogin(true)
             defaults.set(true, forKey: "loginConfigured")
+        } else if FileManager.default.fileExists(atPath: loginURL.path) {
+            setLogin(true)   // point the login item at this copy (the app was Knockdrop.app before)
         }
         let hk = installHotKeys([
             (id: 1, keyCode: kVK_ANSI_K, action: { [weak self] in self?.logLine("hotkey ⌃⌥K"); self?.receive() }),
@@ -660,7 +662,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             let msg = e["message"] as? String ?? "error"
             logLine("receiver: \(msg)")
             if msg.contains("Local Network") {
-                agentInfo = "Blocked: allow Knockdrop in System Settings › Privacy & Security › Local Network"
+                agentInfo = "Blocked: allow KnockDrop in System Settings › Privacy & Security › Local Network"
             }
         default:
             break
@@ -890,7 +892,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         logLine("stopping the share: Mac \(how)")
         sender?.stop()
         overlay.hide()
-        notify("Knockdrop stopped sharing", "Your Mac \(how), so your share ended")
+        notify("KnockDrop stopped sharing", "Your Mac \(how), so your share ended")
     }
 
     func senderEvent(_ e: [String: Any]) {
@@ -945,7 +947,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
     func menuNeedsUpdate(_ menu: NSMenu) {
         menu.removeAllItems()
         notice.hide()
-        let head = NSMenuItem(title: "Knockdrop" + (version.isEmpty ? "" : " \(version)"), action: nil, keyEquivalent: "")
+        let head = NSMenuItem(title: "KnockDrop" + (version.isEmpty ? "" : " \(version)"), action: nil, keyEquivalent: "")
         head.isEnabled = false
         menu.addItem(head)
         if appStale {
@@ -1008,7 +1010,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         }
         menu.addItem(item("Open Downloads", #selector(openDownloads)))
         menu.addItem(item("Open at Login", #selector(toggleLogin), state: FileManager.default.fileExists(atPath: loginURL.path)))
-        menu.addItem(item("Quit Knockdrop", #selector(quit), key: "q"))
+        menu.addItem(item("Quit KnockDrop", #selector(quit), key: "q"))
     }
 
     func item(_ title: String, _ action: Selector, state: Bool? = nil, enabled: Bool = true, key: String = "") -> NSMenuItem {
@@ -1139,8 +1141,8 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
         guard let button = statusItem?.button else { return }
         let active = sender != nil || !offers.isEmpty || armed
         let name = sender != nil ? "dot.radiowaves.left.and.right" : (active ? "hand.tap.fill" : "hand.tap")
-        if let img = NSImage(systemSymbolName: name, accessibilityDescription: "Knockdrop")
-            ?? NSImage(systemSymbolName: active ? "hand.raised.fill" : "hand.raised", accessibilityDescription: "Knockdrop") {
+        if let img = NSImage(systemSymbolName: name, accessibilityDescription: "KnockDrop")
+            ?? NSImage(systemSymbolName: active ? "hand.raised.fill" : "hand.raised", accessibilityDescription: "KnockDrop") {
             img.isTemplate = true
             button.image = img
             button.imagePosition = .imageLeading
@@ -1158,7 +1160,7 @@ final class App: NSObject, NSApplicationDelegate, NSMenuDelegate {
             .baselineOffset: 0.5,
         ])
         button.toolTip = sender != nil ? (shareInfo ?? "Sharing") + " · \(shareKey) stops"
-            : offers.first.map { offerTitle($0) + " · \(receiveKey) to receive" } ?? "Knockdrop"
+            : offers.first.map { offerTitle($0) + " · \(receiveKey) to receive" } ?? "KnockDrop"
         button.appearsDisabled = !receiveOn && sender == nil
     }
 

@@ -1146,7 +1146,10 @@ def relaunch_with_sudo():
     os.execvp("sudo", ["sudo"] + self_command() + sys.argv[1:])
 
 
-APP_PATH = os.path.expanduser("~/Applications/Knockdrop.app")
+APP_NAME = "KnockDrop"
+APP_PATH = os.path.expanduser(f"~/Applications/{APP_NAME}.app")
+OLD_APP_PATH = os.path.expanduser("~/Applications/Knockdrop.app")   # before 0.1.6; same folder on case-insensitive disks
+BUILD_DIR = os.path.expanduser("~/Applications/.knockdrop-build")     # hidden, so Finder never lists a half-built app
 LOGIN_PLIST = os.path.expanduser(f"~/Library/LaunchAgents/{APP_ID}.plist")
 MENUBAR_SRC = os.path.join(HERE, "menubar", "Knockdrop.swift")
 
@@ -1165,7 +1168,19 @@ def menubar_stamp():
         return hashlib.sha256(f.read() + json.dumps(launcher_command()).encode()).hexdigest()
 
 
+def installed_app_name():
+    """The app's folder name exactly as it is on disk (None if not installed)."""
+    names = [n for n in os.listdir(os.path.dirname(APP_PATH)) if n.lower() == f"{APP_NAME}.app".lower()] \
+        if os.path.isdir(os.path.dirname(APP_PATH)) else []
+    return names[0] if names else None
+
+
 def menubar_app_stale():
+    name = installed_app_name()
+    if name is not None and name != f"{APP_NAME}.app":
+        return True   # still named Knockdrop.app (case-insensitive disk)
+    if not os.path.isdir(APP_PATH) and os.path.isdir(OLD_APP_PATH):
+        return True   # still named Knockdrop.app (case-sensitive disk)
     try:
         with open(os.path.join(APP_PATH, "Contents", "Resources", "build-stamp")) as f:
             return f.read() != menubar_stamp()
@@ -1174,8 +1189,9 @@ def menubar_app_stale():
 
 
 def stop_menubar_app():
-    exe = os.path.join(APP_PATH, "Contents", "MacOS", "Knockdrop")
-    if subprocess.run(["/usr/bin/pkill", "-f", exe], capture_output=True).returncode == 0:
+    # -i: also matches the app from before the rename (Knockdrop.app/Contents/MacOS/Knockdrop)
+    exe = os.path.join(APP_PATH, "Contents", "MacOS", APP_NAME)
+    if subprocess.run(["/usr/bin/pkill", "-i", "-f", exe], capture_output=True).returncode == 0:
         time.sleep(1)
 
 
@@ -1189,25 +1205,26 @@ def build_menubar_app(force=False):
         return False
     swiftc = shutil.which("swiftc") or "/usr/bin/swiftc"
     print("building the menu bar app (takes up to a minute the first time)...", flush=True)
-    tmp = APP_PATH + ".building"
-    shutil.rmtree(tmp, ignore_errors=True)
+    shutil.rmtree(BUILD_DIR, ignore_errors=True)
+    shutil.rmtree(APP_PATH + ".building", ignore_errors=True)   # left by older versions
+    tmp = os.path.join(BUILD_DIR, f"{APP_NAME}.app")
     os.makedirs(os.path.join(tmp, "Contents", "MacOS"))
     os.makedirs(os.path.join(tmp, "Contents", "Resources"))
-    exe = os.path.join(tmp, "Contents", "MacOS", "Knockdrop")
+    exe = os.path.join(tmp, "Contents", "MacOS", APP_NAME)
     try:
         r = subprocess.run([swiftc, "-O", "-swift-version", "5", "-o", exe, MENUBAR_SRC])
     except OSError:
         r = None
     if r is None or r.returncode != 0:
-        shutil.rmtree(tmp, ignore_errors=True)
+        shutil.rmtree(BUILD_DIR, ignore_errors=True)
         sys.exit("couldn't build the menu bar app -- it needs the Xcode Command Line Tools "
                  "(install them with: xcode-select --install)")
     info = {
-        "CFBundleIdentifier": APP_ID, "CFBundleName": "Knockdrop", "CFBundleDisplayName": "Knockdrop",
-        "CFBundleExecutable": "Knockdrop", "CFBundlePackageType": "APPL",
+        "CFBundleIdentifier": APP_ID, "CFBundleName": APP_NAME, "CFBundleDisplayName": APP_NAME,
+        "CFBundleExecutable": APP_NAME, "CFBundlePackageType": "APPL",
         "CFBundleShortVersionString": __version__, "CFBundleVersion": __version__,
         "LSUIElement": True, "LSMinimumSystemVersion": "11.0", "NSHighResolutionCapable": True,
-        "NSLocalNetworkUsageDescription": "Knockdrop finds people sharing nearby and receives "
+        "NSLocalNetworkUsageDescription": f"{APP_NAME} finds people sharing nearby and receives "
                                           "what they share over your Wi-Fi.",
         "KDCommand": launcher_command(),
     }
@@ -1218,8 +1235,10 @@ def build_menubar_app(force=False):
         f.write(stamp)
     stop_menubar_app()
     shutil.rmtree(APP_PATH, ignore_errors=True)
+    shutil.rmtree(OLD_APP_PATH, ignore_errors=True)
     os.makedirs(os.path.dirname(APP_PATH), exist_ok=True)
     os.rename(tmp, APP_PATH)
+    shutil.rmtree(BUILD_DIR, ignore_errors=True)
     return True
 
 
@@ -1229,7 +1248,8 @@ def cmd_menubar(args):
         for p in (LOGIN_PLIST,):
             if os.path.exists(p):
                 os.remove(p)
-        shutil.rmtree(APP_PATH, ignore_errors=True)
+        for p in (APP_PATH, OLD_APP_PATH, BUILD_DIR):
+            shutil.rmtree(p, ignore_errors=True)
         print(f"removed the menu bar app ({APP_PATH}) and its login item")
         return
     build_menubar_app(force=args.rebuild)
