@@ -1,6 +1,11 @@
 knockdrop -- share files between Macs on the same Wi-Fi by knocking the same rhythm.
 
-INSTALL (any Mac, Apple Silicon or Intel, macOS 11+)
+HAVE HOMEBREW? Use that instead -- updates are just `brew upgrade knockdrop`:
+  brew install buzo1234/tap/knockdrop
+  (If you installed this zip before, uninstall it first -- see the bottom -- so you
+  don't end up with two different `knockdrop` commands.)
+
+INSTALL FROM THIS ZIP (any Mac, Apple Silicon or Intel, macOS 11+)
   1. Unzip, open Terminal in this folder, run:   sh install.sh
   2. Check your Mac:                             knockdrop check
      If it says "local network access: BLOCKED": System Settings -> Privacy & Security ->
@@ -23,3 +28,5 @@ Traffic is not encrypted and a rhythm is a weak password -- use it on home/offic
 everyday files, not on public networks or for anything sensitive.
 
 Uninstall: sudo rm -rf /usr/local/lib/knockdrop /usr/local/bin/knockdrop
+Updates: download the new zip and run `sh install.sh` again. Source and releases:
+https://github.com/buzo1234/knockdrop
