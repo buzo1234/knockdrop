@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """knockdrop -- share files between Macs on the same Wi-Fi by knocking the same rhythm.
 
-    ./knockdrop send FILE [FILE ...]     knock a rhythm, wait for someone to repeat it
-    ./knockdrop receive                  knock the sender's rhythm to get the files
-    ./knockdrop knock                    just print detected knock patterns (tuning)
-    ./knockdrop check                    check the sensor and network on this Mac
+    knockdrop send FILE [FILE ...]     knock a rhythm, wait for someone to repeat it
+    knockdrop receive                  knock the sender's rhythm to get the files
+    knockdrop knock                    practice knocking and check that two rhythms match
+    knockdrop check                    check the sensor and network on this Mac
 
 Knocks are read from the motion sensor (accelerometer + gyroscope). Macs without
 it (M1, Intel) automatically use the space bar instead; --keys forces that.
+
+Update with `brew upgrade knockdrop`. Docs: https://github.com/buzo1234/knockdrop
 """
 __version__ = "dev"  # set by the Homebrew formula on release
 
@@ -130,7 +132,8 @@ class IMUKnocks:
             self.imu.stop()
             if os.geteuid() != 0:
                 relaunch_with_sudo()
-            sys.exit("the motion sensor isn't sending data -- use --keys to tap the space bar instead")
+            sys.exit("the motion sensor isn't sending data -- tap the space bar instead by adding "
+                     "--keys (e.g. knockdrop receive --keys)")
         self.det.finish_calibration()
         return self
 
@@ -645,8 +648,10 @@ def cmd_check():
     except Exception as e:
         has, info = False, {"error": str(e)}
     sensors = ", ".join(info.get("sensors", [])) or info.get("error", "none")
-    print(f"  motion sensor: {'yes' if has else 'NO -- use --keys'}  ({sensors})")
-    ok &= has
+    if has:
+        print(f"  motion sensor: yes  ({sensors})")
+    else:   # not a failure: knockdrop switches to space-bar taps on its own
+        print("  motion sensor: none -- you'll tap the space bar instead")
     try:
         from multiprocessing import shared_memory
         shm = shared_memory.SharedMemory(create=True, size=4096)
@@ -674,26 +679,37 @@ def cmd_check():
     print("ready" if ok else "not fully ready (see above)")
 
 
+def add_knock_options(p, sub=False):
+    """Knock options work before or after the subcommand (knockdrop --keys receive / knockdrop receive --keys).
+    On subcommands they default to SUPPRESS so they don't overwrite a value given before the subcommand."""
+    d = (lambda v: argparse.SUPPRESS) if sub else (lambda v: v)
+    p.add_argument("--keys", action="store_true", default=d(False),
+                   help="tap the space bar instead of knocking (automatic on Macs without the sensor)")
+    p.add_argument("--sensitivity", type=float, default=d(10.0), metavar="N",
+                   help="knock threshold in noise units; lower = more sensitive (default 10)")
+    p.add_argument("--tolerance", type=float, default=d(0.12), metavar="F",
+                   help="max rhythm difference, as a fraction of pattern length (default 0.12)")
+
+
 def main():
     multiprocessing.freeze_support()
-    ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    ap = argparse.ArgumentParser(prog="knockdrop", description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--version", action="version", version=f"knockdrop {__version__}")
-    ap.add_argument("--keys", action="store_true", help="tap the space bar instead of knocking")
-    ap.add_argument("--sensitivity", type=float, default=10.0,
-                    help="knock threshold in noise units; lower = more sensitive (default 10)")
-    ap.add_argument("--tolerance", type=float, default=0.12,
-                    help="max rhythm difference, as a fraction of pattern length (default 0.12)")
+    add_knock_options(ap)
     ap.add_argument("--pattern", type=lambda s: [float(x) for x in s.split(",")],
                     help=argparse.SUPPRESS)  # knock times in seconds, for scripted tests
     sub = ap.add_subparsers(dest="cmd", required=True)
     s = sub.add_parser("send", help="offer files behind a knock rhythm")
-    s.add_argument("files", nargs="+")
+    add_knock_options(s, sub=True)
+    s.add_argument("files", nargs="+", metavar="FILE", help="files to share")
     s.add_argument("--multi", action="store_true", help="keep sharing after the first receiver")
     s.add_argument("-y", "--yes", action="store_true", help="don't ask to confirm the rhythm")
     r = sub.add_parser("receive", help="knock a rhythm to receive files")
-    r.add_argument("--out", default=os.path.join("~" + os.environ.get("SUDO_USER", ""), "Downloads"))
+    add_knock_options(r, sub=True)
+    r.add_argument("--out", default=os.path.join("~" + os.environ.get("SUDO_USER", ""), "Downloads"),
+                   metavar="DIR", help="where to save received files (default ~/Downloads)")
     r.add_argument("--stay", action="store_true", help="keep receiving after the first transfer")
-    sub.add_parser("knock", help="print detected knock patterns (to tune sensitivity)")
+    add_knock_options(sub.add_parser("knock", help="practice knocking and check that two rhythms match"), sub=True)
     sub.add_parser("check", help="check the sensor and network on this Mac")
     args = ap.parse_args()
 
