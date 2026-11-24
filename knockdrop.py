@@ -4,7 +4,7 @@
     knockdrop send FILE [FILE ...]     knock a rhythm, wait for someone to repeat it
     knockdrop send                     same, but share what's on your clipboard
     knockdrop receive                  knock the sender's rhythm to get the files
-    knockdrop menubar                  receive in the background: just knock, no command
+    knockdrop menubar                  menu bar app: Ctrl+Option+C shares, Ctrl+Option+K receives
     knockdrop knock                    practice knocking and check that two rhythms match
     knockdrop check                    check the sensor and network on this Mac
 
@@ -936,14 +936,25 @@ def cmd_receive(args, source):
 # ---------------------------------------------------------------- agent (background receiver)
 
 def cmd_agent(args):
-    """Background receiver for the menu bar app. JSON events on stdout; commands on stdin
-    ({"cmd": "pattern", "times": [...]} from the keyboard overlay, {"cmd": "keys", "on": bool}).
+    """Background receiver for the menu bar app. JSON events on stdout; commands on stdin.
 
-    Two ways to receive, for the same offer:
-    - elsewhere: the sensor is off until someone nearby shares; then knock their rhythm.
-    - same table (--table): the sensor stays on and remembers rhythms felt in the last
-      TABLE_WINDOW seconds. When an offer appears with the same knock count right after, it
-      was knocked on our table -- claim it with what we felt. No action needed."""
+    It never takes anything on its own and never reacts to the sensor unless asked: offers
+    nearby only show up in "status" events, and the app shows a quiet notice. Typing on the
+    laptop makes knock-like bumps, so listening all the time meant popups mid-work and wrong
+    rhythms sent to the sharer (which can close their offer).
+
+    Commands from the app:
+    - {"cmd": "arm", "on": bool}: the person pressed the receive shortcut. Sensor on, knock
+      events out, and a finished rhythm is tried against the offers. Off again when the app
+      says so (received, cancelled, timed out).
+    - {"cmd": "keys", "on": bool}: they're tapping the space bar instead; ignore the sensor.
+    - {"cmd": "pattern", "times": [...]}: space-bar rhythm to try.
+    - {"cmd": "take", "id": ID}: same table: try the rhythm felt on the table for that offer.
+
+    Same table (--table): the sensor stays on silently and remembers rhythms felt in the last
+    TABLE_WINDOW seconds. An offer that appears right after with the same knock count was
+    probably knocked on our table; it's marked "felt" in status so one key takes it, no
+    knocking. It's never taken without that key."""
     enable_events()
     out_dir = os.path.abspath(os.path.expanduser(args.out))
     os.makedirs(out_dir, exist_ok=True)
@@ -962,9 +973,9 @@ def cmd_agent(args):
     if local_network_blocked():
         emit("error", message="Local Network access is blocked")
 
-    src, knocks, keys_mode = None, [], False
+    src, knocks, keys_mode, armed = None, [], False, False
     failed, scripted_done, last_status = {}, set(), None
-    got, first_seen, table_tried, recent = set(), {}, set(), []   # recent: [(last knock time, pattern)]
+    got, first_seen, recent, felt = set(), {}, [], {}   # recent: [(last knock time, pattern)]; felt: id -> pattern
 
     def claim(pattern, offers, via):
         n = len(pattern)
@@ -976,6 +987,7 @@ def cmd_agent(args):
             emit("pattern", knocks=n, result="no_offer", via=via,
                  offer_knocks=sorted({m["knocks"] for m, _ in offers}))
             return
+        emit("trying", knocks=n, via=via)
         for m, ip in cands:
             try:
                 ok, result = try_claim(m, ip, pattern, out_dir)
@@ -985,7 +997,7 @@ def cmd_agent(args):
             if ok:
                 got.add(m["id"])
                 print_received(m["from"], result)
-                emit("received", sender=m["from"], items=[
+                emit("received", sender=m["from"], via=via, items=[
                     {k: it.get(k) for k in ("name", "size", "path", "clipboard", "copied", "preview")} for it in result])
                 return
             failed[m["id"]] = failed.get(m["id"], 0) + 1
@@ -998,9 +1010,20 @@ def cmd_agent(args):
             now = time.monotonic()
             for m, _ in offers:
                 first_seen.setdefault(m["id"], now)
-            status = {"state": "listening" if offers else "idle", "table": bool(args.table),
+
+            if args.table:      # which offers were knocked on our table (felt just before they appeared)
+                recent[:] = [(t, p) for t, p in recent if now - t < TABLE_WINDOW + 5]
+                for m, _ in offers:
+                    seen = first_seen[m["id"]]
+                    if m["id"] not in felt and now - seen < 4.0:
+                        match = [p for t, p in recent if len(p) == m["knocks"] and seen - TABLE_WINDOW <= t <= seen + 1.0]
+                        if match:
+                            felt[m["id"]] = match[-1]
+
+            status = {"state": "listening" if offers else "idle", "table": bool(args.table), "armed": armed,
                       "offers": [{"id": m["id"], "from": m.get("from", ip), "knocks": m["knocks"],
-                                  "label": offer_label(m), "clipboard": m.get("clipboard")} for m, ip in offers]}
+                                  "label": offer_label(m), "clipboard": m.get("clipboard"),
+                                  "felt": m["id"] in felt} for m, ip in offers]}
             if status != last_status:
                 print(time.strftime("%H:%M:%S"), "nearby:",
                       ", ".join(f"{o['from']} ({o['label']}, {o['knocks']} knocks)" for o in status["offers"]) or "nothing",
@@ -1011,15 +1034,31 @@ def cmd_agent(args):
             with cmd_lock:
                 pending, commands[:] = list(commands), []
             for c in pending:
-                if c.get("cmd") == "keys":           # keyboard overlay open: ignore the sensor meanwhile
+                cmd = c.get("cmd")
+                if cmd == "arm":
+                    armed, keys_mode, knocks = bool(c.get("on")), False, []
+                    if src:
+                        src.flush()
+                    if armed and src is not None:
+                        emit("ready")
+                elif cmd == "keys":                  # tapping the space bar: ignore the sensor meanwhile
                     keys_mode, knocks = bool(c.get("on")), []
-                elif c.get("cmd") == "felt" and isinstance(c.get("times"), list):   # tests: as if felt on the table
+                elif cmd == "felt" and isinstance(c.get("times"), list):   # tests: as if felt on the table
                     recent.append((time.monotonic(), [float(t) for t in c["times"]]))
-                elif c.get("cmd") == "pattern" and isinstance(c.get("times"), list):
+                elif cmd == "pattern" and isinstance(c.get("times"), list):
                     keys_mode, knocks = False, []
                     claim([float(t) for t in c["times"]], offers, "keys")
                     if src:
                         src.flush()
+                elif cmd == "take":
+                    target = [(m, ip) for m, ip in offers if m["id"] == c.get("id")]
+                    pattern = felt.pop(c.get("id"), None)
+                    if not target:
+                        emit("pattern", knocks=0, result="no_offer", via="table", offer_knocks=[])
+                    elif pattern is None:
+                        emit("pattern", knocks=0, result="not_felt", via="table")
+                    else:
+                        claim(pattern, target, "table")
 
             if args.pattern is not None:              # scripted test: claim each new offer once
                 for m, ip in offers:
@@ -1029,20 +1068,7 @@ def cmd_agent(args):
                 time.sleep(0.25)
                 continue
 
-            if args.table:                             # same-table auto-receive
-                recent[:] = [(t, p) for t, p in recent if now - t < TABLE_WINDOW + 5]
-                for m, ip in offers:
-                    if m["id"] in table_tried:
-                        continue
-                    seen = first_seen[m["id"]]
-                    felt = [p for t, p in recent if len(p) == m["knocks"] and seen - TABLE_WINDOW <= t <= seen + 1.0]
-                    if felt:
-                        table_tried.add(m["id"])
-                        claim(felt[-1], [(m, ip)], "table")
-                    elif now - seen > 4.0 and not knocks:   # nothing felt around then: not our table
-                        table_tried.add(m["id"])
-
-            want_sensor = has_sensor and (offers or args.table)
+            want_sensor = has_sensor and (armed or args.table)
             if want_sensor and src is None:
                 src = IMUKnocks(args.sensitivity)
                 try:
@@ -1064,14 +1090,14 @@ def cmd_agent(args):
                 if keys_mode:
                     continue
                 knocks.append(k)
-                emit("knock", n=len(knocks))
+                if armed:
+                    emit("knock", n=len(knocks))
             if knocks and time.monotonic() - knocks[-1] > PATTERN_END_QUIET:
                 last, pattern, knocks = knocks[-1], [k - knocks[0] for k in knocks], []
-                if args.table and MIN_KNOCKS <= len(pattern) <= MAX_KNOCKS:
-                    recent.append((last, pattern))
-                if offers:
+                if armed:
                     claim(pattern, offers, "sensor")
-                    table_tried.update(m["id"] for m, _ in offers)   # we knocked for these ourselves
+                elif args.table and MIN_KNOCKS <= len(pattern) <= MAX_KNOCKS:
+                    recent.append((last, pattern))
                 src.flush()
             time.sleep(0.005)
     finally:
@@ -1212,8 +1238,9 @@ def cmd_menubar(args):
         return
     subprocess.run(["/usr/bin/open", APP_PATH])
     print("knockdrop is in your menu bar (the hand icon).\n"
-          "  when someone nearby shares, knock their rhythm on your laptop -- or press Ctrl+Option+K\n"
-          "  and tap it on the space bar. Shared clipboards land on your clipboard; files in ~/Downloads.")
+          "  when someone nearby shares you'll see a small notice: press Ctrl+Option+K, then knock\n"
+          "  their rhythm or tap it on the space bar. Ctrl+Option+C shares your clipboard (again to stop).\n"
+          "  Shared clipboards land on your clipboard; files in ~/Downloads.")
 
 
 def cmd_check():
@@ -1290,7 +1317,7 @@ def main():
     r.add_argument("--stay", action="store_true", help="keep receiving after the first transfer")
     add_knock_options(sub.add_parser("knock", help="practice knocking and check that two rhythms match"), sub=True)
     sub.add_parser("check", help="check the sensor and network on this Mac")
-    m = sub.add_parser("menubar", help="menu bar app: receive in the background by just knocking")
+    m = sub.add_parser("menubar", help="menu bar app: share and receive with shortcuts, no commands")
     m.add_argument("--remove", action="store_true", help="quit and remove the menu bar app and its login item")
     m.add_argument("--rebuild", action="store_true", help="rebuild the app even if it looks up to date")
     m.add_argument("--build-only", action="store_true", help=argparse.SUPPRESS)
@@ -1299,7 +1326,7 @@ def main():
     a.add_argument("--out", default="~/Downloads", metavar="DIR",
                    help="where to save received files (default ~/Downloads)")
     a.add_argument("--table", action="store_true",
-                   help="same-table auto-receive: keep the sensor on and take offers knocked on this table")
+                   help="keep the sensor on and flag offers knocked on this table (taken only when the app asks)")
     a.add_argument("--allow-self", action="store_true", help=argparse.SUPPRESS)  # accept our own offers (tests)
     args = ap.parse_args()
 

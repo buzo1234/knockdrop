@@ -49,21 +49,22 @@ Update with `git -C ~/.knockdrop pull`. If macOS asks you to install the Command
 
 | | |
 |---|---|
-| **Share your clipboard** | Copy anything (text, an image, files in Finder), press **⌃⌥C**, and knock a rhythm on the table. |
+| **Share your clipboard** | Copy anything (text, an image, files in Finder), press **⌃⌥C**, and knock a rhythm on the table. Press **⌃⌥C** again to stop sharing. |
 | **Share files** | Menu → **Share Files…**, then knock. |
-| **Receive** | Knock the sender's rhythm on your laptop. No click, no dialog: the knock *is* the accept. |
-| **Receive with the keyboard** | Press **⌃⌥K** and tap the rhythm on the space bar. Useful on Macs without the sensor, or in a quiet meeting. Esc cancels. |
-| **Same table, hands-free** | Turn on **Auto-receive from My Table**. When a teammate knocks on the table to share, your laptop feels it and takes the share. You do nothing. |
+| **Receive** | When someone nearby shares, a small notice appears under the menu bar icon (it waits until you stop typing), and the icon shows their tap count. Press **⌃⌥K** (or click the notice), then knock their rhythm on your laptop or tap it on the space bar. Esc cancels. |
+| **Same table, one key** | Turn on **Notice Knocks on My Table**. When a teammate knocks on your table to share, the notice says so and **⌃⌥K** takes it right away, with no knocking. |
+
+Knockdrop never receives anything until you press **⌃⌥K**. It doesn't pop up while you work and it plays no sounds.
 
 **Where things land:** a shared clipboard goes on **your clipboard**, so press ⌘V. Text and images live only on the clipboard. Files copied in Finder are saved to `~/Downloads` and put on your clipboard, so ⌘V in Finder pastes them. Plain file shares go to `~/Downloads`.
 
-A share from the menu bar stays open for 5 minutes for everyone. Teammates at your table with *Auto-receive* on get it right away. Anyone else on the Wi-Fi knocks the rhythm shown on screen (`●──●─●────●`). Stop it early from the menu.
+A share from the menu bar stays open for 5 minutes, and the menu bar shows the time left and how many people got it. Anyone on the Wi-Fi knocks the rhythm shown in the menu (`●──●─●────●`). It stops when you press **⌃⌥C** again, click the notice, or choose **Stop Sharing** in the menu. It also stops on its own when your Mac locks or sleeps.
 
 <details>
 <summary>Details</summary>
 
 - The app is built on your Mac from `menubar/Knockdrop.swift` with the Command Line Tools (a few seconds) and installed as `~/Applications/Knockdrop.app`. The first time, macOS asks to allow **Knockdrop** on the local network. Allow it.
-- The receiver keeps the motion sensor off until someone nearby shares. *Auto-receive from My Table* keeps it on, which costs about 3% of one CPU core.
+- The receiver keeps the motion sensor off until you press ⌃⌥K. *Notice Knocks on My Table* keeps it on, which costs about 3% of one CPU core.
 - If the menu shows **Restart to Finish Updating** after a `brew upgrade`, click it, or run `knockdrop menubar` again.
 - Log: `~/Library/Logs/Knockdrop.log`. Remove the app and its login item with `knockdrop menubar --remove`.
 
@@ -154,7 +155,7 @@ Any mix works: a knocker can share with a space-bar tapper.
 2. **Comparing rhythms.** Each gap between knocks becomes a fraction of the whole pattern, so a slow and a fast version of the same rhythm look identical. Two patterns match when every fraction is within the tolerance.
 3. **Finding each other.** The sender announces itself with UDP multicast and broadcast. The rhythm is never broadcast; only the sender ever compares it.
 4. **Transfer.** Files stream over TCP and are checked against their SHA-256 before saving. An offer closes after one transfer (or 5 minutes with `--multi`, which menu bar shares use), or after 8 wrong attempts.
-5. **Same table.** A knock on a table shakes every laptop on it. With *Auto-receive from My Table* on, the receiver keeps the sensor running and remembers rhythms it felt in the last 20 seconds. When an offer with the same knock count appears right after, it claims the offer with the rhythm it felt. The sender checks it exactly like a knocked-in rhythm, so the table and people elsewhere use the same offer.
+5. **Same table.** A knock on a table shakes every laptop on it. With *Notice Knocks on My Table from My Table* on, the receiver keeps the sensor running and remembers rhythms it felt in the last 20 seconds. When an offer with the same knock count appears right after, it claims the offer with the rhythm it felt. The sender checks it exactly like a knocked-in rhythm, so the table and people elsewhere use the same offer.
 
 ## Heads-up
 
@@ -165,7 +166,7 @@ Any mix works: a knocker can share with a space-bar tapper.
 - On some Macs the sensor only streams as root. knockdrop then re-runs itself with `sudo` and asks for your password.
 - Typing or bumping the desk while knocking adds extra knocks. Keep your other hand off the laptop.
 - Mixed short and long gaps make a rhythm harder to guess than an even beat.
-- *Auto-receive from My Table* means anyone at the table with it turned on gets what you knock to share. That's the point, but keep it in mind before sharing something private.
+- *Notice Knocks on My Table from My Table* means anyone at the table with it turned on gets what you knock to share. That's the point, but keep it in mind before sharing something private.
 
 ## Development
 
