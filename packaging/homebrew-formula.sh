@@ -24,9 +24,9 @@ class Knockdrop < Formula
       Run \`knockdrop check\` once. If it reports Local Network access as BLOCKED, allow your
       terminal app in System Settings > Privacy & Security > Local Network.
 
-      Receive without typing a command -- just knock -- with the menu bar app:
+      Share with Ctrl+Option+C and receive with Ctrl+Option+K from the menu bar app:
         knockdrop menubar
-      After upgrading, run it again (or use "Restart to Finish Updating" in its menu).
+      It updates itself after `brew upgrade`. Upgrading from 0.1.5 or older: run it once more.
     EOS
   end
 

@@ -54,7 +54,7 @@ Update with `git -C ~/.knockdrop pull`. If macOS asks you to install the Command
 | **Receive** | When someone nearby shares, a small notice appears under the menu bar icon (it waits until you stop typing), and the icon shows their tap count. Press **⌃⌥K** (or click the notice), then knock their rhythm on your laptop or tap it on the space bar. Esc cancels. |
 | **Same table, one key** | Turn on **Notice Knocks on My Table**. When a teammate knocks on your table to share, the notice says so and **⌃⌥K** takes it right away, with no knocking. |
 
-Knockdrop never receives anything until you press **⌃⌥K**. It doesn't pop up while you work and it plays no sounds.
+KnockDrop never receives anything until you press **⌃⌥K**. It doesn't pop up while you work and it plays no sounds.
 
 **Where things land:** a shared clipboard goes on **your clipboard**, so press ⌘V. Text and images live only on the clipboard. Files copied in Finder are saved to `~/Downloads` and put on your clipboard, so ⌘V in Finder pastes them. Plain file shares go to `~/Downloads`.
 
@@ -63,9 +63,9 @@ A share from the menu bar stays open for 5 minutes, and the menu bar shows the t
 <details>
 <summary>Details</summary>
 
-- The app is built on your Mac from `menubar/Knockdrop.swift` with the Command Line Tools (a few seconds) and installed as `~/Applications/Knockdrop.app`. The first time, macOS asks to allow **Knockdrop** on the local network. Allow it.
+- The app is built on your Mac from `menubar/Knockdrop.swift` with the Command Line Tools (a few seconds) and installed as `~/Applications/KnockDrop.app`. The first time, macOS asks to allow **KnockDrop** on the local network. Allow it.
 - The receiver keeps the motion sensor off until you press ⌃⌥K. *Notice Knocks on My Table* keeps it on, which costs about 3% of one CPU core.
-- If the menu shows **Restart to Finish Updating** after a `brew upgrade`, click it, or run `knockdrop menubar` again.
+- After `brew upgrade`, the app updates itself within a minute: it rebuilds and restarts once you aren't sharing or receiving. If that fails, the menu shows **Restart to Finish Updating**, or run `knockdrop menubar` again.
 - Log: `~/Library/Logs/Knockdrop.log`. Remove the app and its login item with `knockdrop menubar --remove`.
 
 </details>
