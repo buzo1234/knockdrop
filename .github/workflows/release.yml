@@ -11,6 +11,7 @@ on:
       - knockdrop
       - knockdrop.py
       - macimu/**
+      - menubar/**
       - packaging/homebrew-formula.sh
   workflow_dispatch:
     inputs:
@@ -46,6 +47,9 @@ jobs:
           ./knockdrop --help > /dev/null
           ./knockdrop --version
 
+      - name: Build the menu bar app
+        run: ./knockdrop menubar --build-only
+
       - name: Next version
         id: version
         env:
@@ -75,7 +79,7 @@ jobs:
           V: ${{ steps.version.outputs.version }}
         run: |
           git archive --format=tar.gz --prefix="knockdrop-$V/" -o "knockdrop-$V.tar.gz" HEAD \
-            knockdrop knockdrop.py macimu LICENSE README.md
+            knockdrop knockdrop.py macimu menubar LICENSE README.md
           gh release create "v$V" "knockdrop-$V.tar.gz" --target "$GITHUB_SHA" \
             --title "knockdrop $V" --generate-notes
           echo "SHA256=$(shasum -a 256 "knockdrop-$V.tar.gz" | cut -d' ' -f1)" >> "$GITHUB_ENV"
@@ -99,6 +103,7 @@ jobs:
           brew tap buzo1234/tap "$PWD/tap"
           brew install buzo1234/tap/knockdrop
           test "$(knockdrop --version)" = "knockdrop $V"
+          knockdrop menubar --build-only
 
       - name: Publish formula to the tap
         if: steps.version.outputs.skip != 'true'

@@ -38,6 +38,12 @@ _ALS_CH_OFFSETS = [20, 24, 28, 32]
 _NATIVE_RATE_HZ = 800
 
 
+def _shm_names():
+    """Shared-memory names for this process (macOS limits them to 31 chars)."""
+    pid = os.getpid()
+    return {n: f"{n}_{pid}" for n in (SHM_NAME, SHM_NAME_GYRO, SHM_NAME_ALS, SHM_NAME_LID)}
+
+
 class SensorNotFound(RuntimeError):
     """Raised when no SPU IMU device is found on this machine."""
     pass
@@ -211,23 +217,26 @@ class IMU:
 
         self._cleanup_stale_shm()
 
-        self._shm_accel = self._create_shm(SHM_NAME, SHM_SIZE)
+        # knockdrop: per-process names, so two processes (e.g. the menu bar receiver and a
+        # terminal `knockdrop send`) can read the sensor at once without clobbering each other
+        name = _shm_names()
+        self._shm_accel = self._create_shm(name[SHM_NAME], SHM_SIZE)
         kwargs = {'decimation': self._decimation, 'shutdown_event': self._shutdown}
 
         if self._want_gyro:
-            self._shm_gyro = self._create_shm(SHM_NAME_GYRO, SHM_SIZE)
-            kwargs['gyro_shm_name'] = SHM_NAME_GYRO
+            self._shm_gyro = self._create_shm(name[SHM_NAME_GYRO], SHM_SIZE)
+            kwargs['gyro_shm_name'] = name[SHM_NAME_GYRO]
         if self._want_als:
-            self._shm_als = self._create_shm(SHM_NAME_ALS, SHM_ALS_SIZE)
-            kwargs['als_shm_name'] = SHM_NAME_ALS
+            self._shm_als = self._create_shm(name[SHM_NAME_ALS], SHM_ALS_SIZE)
+            kwargs['als_shm_name'] = name[SHM_NAME_ALS]
         if self._want_lid:
-            self._shm_lid = self._create_shm(SHM_NAME_LID, SHM_LID_SIZE)
-            kwargs['lid_shm_name'] = SHM_NAME_LID
+            self._shm_lid = self._create_shm(name[SHM_NAME_LID], SHM_LID_SIZE)
+            kwargs['lid_shm_name'] = name[SHM_NAME_LID]
 
         self._shutdown.clear()
         self._worker = threading.Thread(
             target=sensor_worker,
-            args=(SHM_NAME, 0),
+            args=(name[SHM_NAME], 0),
             kwargs=kwargs,
             daemon=True,
         )
@@ -564,8 +573,7 @@ class IMU:
         return shm
 
     def _cleanup_stale_shm(self):
-        names = [SHM_NAME, SHM_NAME_GYRO, SHM_NAME_ALS, SHM_NAME_LID]
-        for name in names:
+        for name in _shm_names().values():
             try:
                 old = multiprocessing.shared_memory.SharedMemory(
                     name=name, create=False)
