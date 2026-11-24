@@ -1,0 +1,8 @@
+#!/bin/sh
+# Resolve symlinks so `ln -s .../knockdrop /usr/local/bin/knockdrop` works.
+SELF="$0"
+while [ -L "$SELF" ]; do
+  L="$(readlink "$SELF")"
+  case "$L" in /*) SELF="$L" ;; *) SELF="$(dirname "$SELF")/$L" ;; esac
+done
+exec /usr/bin/python3 "$(cd "$(dirname "$SELF")" && pwd)/knockdrop.py" "$@"
