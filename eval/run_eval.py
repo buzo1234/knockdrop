@@ -2,8 +2,8 @@
 """Replay recorded clips through a knock detector and score it.
 
     python3 eval/run_eval.py                              baseline on eval/data
-    python3 eval/run_eval.py --sweep threshold=6,8,10,12,15
-    python3 eval/run_eval.py --param threshold=8 -v       per-clip detail
+    python3 eval/run_eval.py --sweep threshold=1.5,2,2.5,3,4
+    python3 eval/run_eval.py --param threshold=3 -v       per-clip detail
     python3 eval/run_eval.py some/session/dir --json out.json
 
 Replays each clip the way the app sees it: calibrate on the hands-off window,
@@ -22,6 +22,7 @@ Metrics
 """
 
 import argparse
+import inspect
 import itertools
 import json
 import os
@@ -243,7 +244,7 @@ def main():
     ap.add_argument("paths", nargs="*", default=[C.DATA_DIR], help="clip files or dirs (default eval/data)")
     ap.add_argument("--detector", default="baseline", choices=sorted(DETECTORS))
     ap.add_argument("--param", action="append", help="fixed param, e.g. threshold=8 or tolerance=0.15")
-    ap.add_argument("--sweep", action="append", help="sweep a param, e.g. threshold=6,8,10 (repeatable)")
+    ap.add_argument("--sweep", action="append", help="sweep a param, e.g. threshold=2,2.5,3 (repeatable)")
     ap.add_argument("-v", "--verbose", action="store_true", help="per-clip detail")
     ap.add_argument("--json", help="write full results to this file")
     args = ap.parse_args()
@@ -267,7 +268,8 @@ def main():
     summary_table([s for s, _ in results])
 
     # detail for the default config if it was swept, else the single config
-    pick = next(((s, r) for s, r in results if s["params"].get("threshold", 10.0) == 10.0), results[0])
+    default = inspect.signature(K.KnockDetector).parameters["threshold"].default
+    pick = next(((s, r) for s, r in results if s["params"].get("threshold", default) == default), results[0])
     breakdown(*pick, verbose=args.verbose)
     print(f"\n({time.time() - t0:.1f}s)")
 
