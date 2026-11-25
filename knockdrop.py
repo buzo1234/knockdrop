@@ -98,48 +98,69 @@ def read_parent_commands(on_command=None):
 
 # ---------------------------------------------------------------- knock detection
 
+class _HighPass:
+    """2nd-order high-pass biquad (RBJ cookbook), one channel."""
+
+    def __init__(self, cutoff, q, rate):
+        w0 = 2 * math.pi * cutoff / rate
+        cw, alpha = math.cos(w0), math.sin(w0) / (2 * q)
+        a0 = 1 + alpha
+        self.b = ((1 + cw) / 2 / a0, -(1 + cw) / a0, (1 + cw) / 2 / a0)
+        self.a = (-2 * cw / a0, (1 - alpha) / a0)
+        self.x1 = self.x2 = self.y1 = self.y2 = 0.0
+
+    def __call__(self, x):
+        b, a = self.b, self.a
+        y = b[0] * x + b[1] * self.x1 + b[2] * self.x2 - a[0] * self.y1 - a[1] * self.y2
+        self.x2, self.x1, self.y2, self.y1 = self.x1, x, self.y1, y
+        return y
+
+
 class KnockDetector:
     """Streaming knock detector over 6-channel IMU samples (accel g, gyro deg/s).
 
     Only the gyroscope is used. A knuckle knock makes the chassis twitch: a sharp,
     broadband gyro burst right at impact. The accelerometer is low-pass filtered
-    in hardware, rings ~40 Hz for 100+ ms after the impact, and also picks up
-    hands landing on / lifting off the palm rest. Mixing it in made real knocks
-    and those non-knock events overlap in the recorded eval clips.
+    in hardware and also picks up hands landing on / lifting off the palm rest.
 
-    Each gyro axis is high-passed (EMA baseline, `baseline_s`) and z-scored against
-    noise measured during calibration. Energy is the mean squared z, smoothed over
-    `window_s`, so a knock's alternating-sign burst adds up instead of being judged
-    one sample at a time; pure noise sits near 1. A knock is the moment
-    sqrt(energy) crosses `threshold`; it re-arms only after it settles below
-    threshold/2 for `settle` seconds and at least `refractory` seconds passed.
+    Each gyro axis goes through a 4th-order Butterworth high-pass at `cutoff` Hz.
+    Below that sit the laptop rocking on a lap (2-12 Hz), desk hum and the lid
+    wobbling; above it, the only thing left at rest is the sensor's own noise, so
+    calibration measures the same floor on any surface. Each axis is z-scored
+    against that noise; energy is the mean squared z, smoothed over `window_s`.
+
+    A knock fires when sqrt(energy) exceeds `threshold` AND has jumped to `rise`
+    times the lowest value since the detector re-armed. Re-arming needs energy to
+    fall to `fall` x the knock's peak (or below threshold/2) and `refractory`
+    seconds to pass. So a knock can land on the ringing tail of the previous one:
+    a hard knock rings for ~0.5 s, longer than the gap in a quick rhythm.
     """
 
     CHANNELS = slice(3, 6)   # gyro x, y, z
+    BUTTERWORTH_Q = (0.5412, 1.3066)   # two biquads = 4th order
 
-    def __init__(self, threshold=2.5, refractory=0.08, settle=0.02, baseline_s=0.02,
-                 window_s=0.015, rate=800.0):
+    def __init__(self, threshold=4.0, cutoff=60.0, window_s=0.015, rise=3.0, fall=0.5,
+                 refractory=0.08, rate=800.0):
         self.threshold = threshold
+        self.rise = rise
+        self.fall = fall
         self.refractory = refractory
-        self.settle = settle
-        self.alpha = 1.0 / (baseline_s * rate)
+        self.filters = [[_HighPass(cutoff, q, rate) for q in self.BUTTERWORTH_Q] for _ in range(3)]
         self.beta = 1.0 / (window_s * rate)
-        self.base = None
         self.noise = None
         self.energy = 0.0
         self._calib = []
         self.armed = True
+        self.trough = float("inf")
+        self.peak = 0.0
         self.last_knock = -1e9
-        self.quiet_since = None
 
     def _highpass(self, v):
-        v = v[self.CHANNELS]
-        if self.base is None:
-            self.base = list(v)
         out = []
-        for i, x in enumerate(v):
-            self.base[i] += self.alpha * (x - self.base[i])
-            out.append(x - self.base[i])
+        for chain, x in zip(self.filters, v[self.CHANNELS]):
+            for f in chain:
+                x = f(x)
+            out.append(x)
         return out
 
     def calibrate_feed(self, v):
@@ -151,8 +172,12 @@ class KnockDetector:
         for c in cols:
             s = sorted(abs(x) for x in c)
             mad = s[len(s) // 2] if s else 0.0
-            self.noise.append(max(1.4826 * mad, 0.03))   # deg/s; floor guards a dead-quiet calibration
+            self.noise.append(max(1.4826 * mad, 0.01))   # deg/s; floor guards a dead-quiet calibration
         self._calib = []
+
+    def reset(self):
+        """Forget the previous knock (after a flush)."""
+        self.armed, self.trough, self.last_knock = True, float("inf"), -1e9
 
     def feed(self, t, v):
         """Feed one sample; return the knock time if this sample starts a knock."""
@@ -161,19 +186,17 @@ class KnockDetector:
         self.energy += self.beta * (z2 - self.energy)
         e = math.sqrt(self.energy)
         if self.armed:
-            if e > self.threshold and t - self.last_knock > self.refractory:
+            self.trough = min(self.trough, e)
+            if e > self.threshold and e > self.rise * self.trough and t - self.last_knock > self.refractory:
                 self.armed = False
-                self.quiet_since = None
+                self.peak = e
                 self.last_knock = t
                 return t
         else:
-            if e < self.threshold / 2:
-                if self.quiet_since is None:
-                    self.quiet_since = t
-                elif t - self.quiet_since >= self.settle:
-                    self.armed = True
-            else:
-                self.quiet_since = None
+            self.peak = max(self.peak, e)
+            if (e < self.fall * self.peak or e < self.threshold / 2) and t - self.last_knock > self.refractory:
+                self.armed = True
+                self.trough = e
         return None
 
 
@@ -244,7 +267,7 @@ class IMUKnocks:
 
     def flush(self):
         self._drain()
-        self.det.armed, self.det.last_knock = True, -1e9
+        self.det.reset()
 
     def poll(self):
         knocks = []
@@ -1310,8 +1333,8 @@ def add_knock_options(p, sub=False):
     d = (lambda v: argparse.SUPPRESS) if sub else (lambda v: v)
     p.add_argument("--keys", action="store_true", default=d(False),
                    help="tap the space bar instead of knocking (automatic on Macs without the sensor)")
-    p.add_argument("--sensitivity", type=float, default=d(2.5), metavar="N",
-                   help="knock threshold in noise units; lower = more sensitive (default 2.5)")
+    p.add_argument("--sensitivity", type=float, default=d(4.0), metavar="N",
+                   help="knock threshold in noise units; lower = more sensitive (default 4)")
     p.add_argument("--tolerance", type=float, default=d(0.12), metavar="F",
                    help="max rhythm difference, as a fraction of pattern length (default 0.12)")
 

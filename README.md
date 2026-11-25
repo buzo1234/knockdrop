@@ -118,7 +118,7 @@ Knock with a knuckle on the palm rest or beside the trackpad, at least 3 times. 
 | Flag | |
 |---|---|
 | `--keys` | Tap the space bar instead of knocking |
-| `--sensitivity N` | Knock threshold, default `2.5`. Lower is more sensitive |
+| `--sensitivity N` | Knock threshold, default `4`. Lower is more sensitive |
 | `--tolerance F` | How different two rhythms may be and still match, default `0.12` |
 | `send --multi` | Keep sharing after the first receiver |
 | `send -y` | Don't ask to confirm the rhythm |

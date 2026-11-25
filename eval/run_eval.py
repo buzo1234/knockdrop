@@ -2,8 +2,8 @@
 """Replay recorded clips through a knock detector and score it.
 
     python3 eval/run_eval.py                              baseline on eval/data
-    python3 eval/run_eval.py --sweep threshold=1.5,2,2.5,3,4
-    python3 eval/run_eval.py --param threshold=3 -v       per-clip detail
+    python3 eval/run_eval.py --sweep threshold=3,4,6,8
+    python3 eval/run_eval.py --param threshold=6 -v       per-clip detail
     python3 eval/run_eval.py some/session/dir --json out.json
 
 Replays each clip the way the app sees it: calibrate on the hands-off window,
@@ -42,8 +42,11 @@ import knockdrop as K  # noqa: E402
 # A detector exposes calibrate_feed(v), finish_calibration(), feed(t, v) -> t | None,
 # where v = (ax, ay, az, gx, gy, gz). Add new candidates here.
 
+import candidates  # noqa: E402
+
 DETECTORS = {
     "baseline": lambda **kw: K.KnockDetector(**kw),
+    "legacy": lambda **kw: candidates.LegacyKnockDetector(**kw),   # pre-Nov 2026 detector
 }
 
 MATCHER_PARAMS = {"tolerance"}
