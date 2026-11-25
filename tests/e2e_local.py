@@ -37,9 +37,9 @@ def check(name, ok, detail=""):
 class Proc:
     """A knockdrop process whose JSON events we can wait for."""
 
-    def __init__(self, args, events=True):
+    def __init__(self, args, events=True, env=None):
         self.p = subprocess.Popen(KD + args, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-                                  stderr=subprocess.PIPE, text=True)
+                                  stderr=subprocess.PIPE, text=True, env={**os.environ, **(env or {})})
         self.q = queue.Queue()
         self.events = []
         threading.Thread(target=self._read, daemon=True).start()
@@ -77,9 +77,9 @@ class Proc:
                 self.p.kill()
 
 
-def share(args, pattern=P):
+def share(args, pattern=P, env=None):
     """Start a multi-receiver offer and wait until it's announced."""
-    s = Proc(["--pattern", csv(pattern), "send", "--events", "--multi"] + args)
+    s = Proc(["--pattern", csv(pattern), "send", "--events", "--multi"] + args, env=env)
     assert s.wait("waiting"), "sender never started waiting: " + s.p.stderr.read()
     time.sleep(1.2)   # first beacons out
     return s
@@ -209,6 +209,22 @@ try:
     sts = [e for e in a.events if e["event"] == "status"]
     check("no offers listed", all(not e["offers"] for e in sts), str(sts))
     a.stop(); s.stop()
+
+    print("Bonjour only (how iPhones announce offers and find ours): found, claimed, gone when it stops")
+    shutil.rmtree(OUT); os.makedirs(OUT)
+    s = share([doc], env={"KNOCKDROP_BEACONS": "bonjour"}); procs.append(s)
+    a = Proc(["--pattern", csv(P_SAME), "agent", "--allow-self", "--out", OUT],
+             env={"KNOCKDROP_BEACONS": "bonjour"}); procs.append(a)
+    st = a.wait("status", 10, where=lambda e: e["offers"])
+    o = st["offers"][0] if st else {}
+    check("offer seen over Bonjour", o.get("knocks") == 5 and o.get("label") == "1 file", str(st))
+    r = a.wait("received", 10)
+    check("received over Bonjour", r is not None and kd.file_digest(os.path.join(OUT, "deck.pdf")) == kd.file_digest(doc),
+          str([e for e in a.events if e["event"] != "status"]) + a.p.stderr.read() if r is None else "")
+    s.stop()
+    gone = a.wait("status", 10, where=lambda e: not e["offers"])
+    check("offer gone once the sender stops", gone is not None)
+    a.stop()
 
     print("terminal `knockdrop receive` also puts clipboard text on the clipboard")
     set_text("from the terminal ✓")

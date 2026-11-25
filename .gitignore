@@ -3,3 +3,6 @@ __pycache__/
 *.pyc
 .DS_Store
 eval/data/
+xcuserdata/
+*.xcuserstate
+DerivedData/

@@ -2,11 +2,11 @@
 
 # 👊 knockdrop
 
-**Knock on the table. Your teammates' laptops feel it, and your clipboard lands on theirs.**
+**Knock on the table. Your teammates' laptops and phones feel it, and your clipboard lands on theirs.**
 
-Bump-style file sharing between Macs on the same Wi-Fi, using the hidden motion sensor in Apple Silicon MacBooks.
+Bump-style file sharing between Macs and iPhones on the same Wi-Fi, using the hidden motion sensor in Apple Silicon MacBooks.
 
-`macOS` · `zero dependencies` · `one Python file` · `MIT`
+`macOS` · `iOS` · `zero dependencies` · `one Python file` · `MIT`
 
 ```
   knock knock . knock ...... knock . knock
@@ -67,6 +67,33 @@ A share from the menu bar stays open for 5 minutes, and the menu bar shows the t
 - The receiver keeps the motion sensor off until you press ⌃⌥K. *Notice Knocks on My Table* keeps it on, which costs about 3% of one CPU core.
 - After `brew upgrade`, the app updates itself within a minute: it rebuilds and restarts once you aren't sharing or receiving. If that fails, the menu shows **Restart to Finish Updating**, or run `knockdrop menubar` again.
 - Log: `~/Library/Logs/Knockdrop.log`. Remove the app and its login item with `knockdrop menubar --remove`.
+
+</details>
+
+## iPhone
+
+The iPhone app uses the same protocol, so phones and Macs share with each other in any direction.
+
+| | |
+|---|---|
+| **Receive** | Open KnockDrop. Whoever is sharing nearby shows up at the top. Tap their rhythm anywhere on the big pad. |
+| **Same table** | Leave your phone on the table with KnockDrop open. When someone knocks on that table to share, the phone feels it and the share arrives without you touching anything. |
+| **Share** | Tap **Paste** (your clipboard), **Photos** or **Files**, then tap a secret rhythm. Others knock it on their Mac or tap it on their phone. |
+| **From any app** | Share sheet → **KnockDrop** → tap a rhythm. Keep the sheet open until they have it. |
+
+**Where things land:** clipboard text and images go on your clipboard. Files go to **Files › On My iPhone › KnockDrop**, and photos and videos have a **Save to Photos** button.
+
+**Install:** it isn't on the App Store. Open `ios/KnockDrop.xcodeproj` in Xcode, choose your team under *Signing & Capabilities* for both targets (KnockDrop and KnockDropShare), and run it on your iPhone. If Xcode says a bundle ID is taken, change `io.github.buzo1234.knockdrop` to anything of yours on both targets and keep the `.share` suffix on the extension. Needs iOS 17. Macs see iPhones only from the version that added Bonjour (below), so run `brew update && brew upgrade knockdrop` on them.
+
+<details>
+<summary>Details</summary>
+
+- The first launch asks for Local Network access. Allow it, or nothing nearby shows up.
+- The phone listens only while KnockDrop is on screen. The screen stays awake while you share, and leaving the app stops the share, because iOS pauses apps in the background.
+- *Feel knocks on the table* (gear menu) uses the phone's motion sensor at 100 Hz, which needs no permission. It also has a sensitivity slider and a live knock counter for trying it on your table. Turn it off to receive only by tapping.
+- Tapping the screen also shakes the phone, so taps win: once a rhythm starts on the screen, the sensor is ignored until it ends.
+- iOS lets an app use UDP broadcast and multicast only with an entitlement Apple grants case by case, so iPhones find offers over Bonjour (`_knockdrop._tcp`). Macs announce and look for offers both ways.
+- `ios/test.sh` checks the app with only the Command Line Tools. It typechecks the app and the share extension against UIKit and SwiftUI through the Mac Catalyst SDK, then runs the app's network code on this Mac against `knockdrop.py` with real Bonjour and sockets.
 
 </details>
 
@@ -133,8 +160,9 @@ Knock with a knuckle on the palm rest or beside the trackpad, at least 3 times. 
 |---|---|
 | MacBook with M2 or newer | 👊 Knock on the laptop body |
 | M1, Intel, desktops | ⌨️ Tap the space bar (switches automatically) |
+| iPhone (iOS 17+) | 👆 Tap the screen, or 👊 knock on the table it's lying on |
 
-Any mix works: a knocker can share with a space-bar tapper.
+Any mix works: a knocker can share with a space-bar tapper or a phone.
 
 ## How it works
 
@@ -143,7 +171,8 @@ Any mix works: a knocker can share with a space-bar tapper.
    knocks o--o-o-----o--o
    opens a TCP port
    beacon every 1s ─── UDP :47477 ────────────▶   sees "alices-macbook, 5 knocks, 2 files"
-   (name, port, knock count, file list;           knocks o--o-o-----o--o
+   + Bonjour _knockdrop._tcp                       knocks o--o-o-----o--o
+   (name, port, knock count, files;
     never the rhythm)
                     ◀──── knock timings ──────     sends its timings to offers with
                                                    the same knock count
@@ -153,7 +182,7 @@ Any mix works: a knocker can share with a space-bar tapper.
 
 1. **Reading knocks.** The accelerometer and gyroscope in Apple Silicon MacBooks aren't exposed by any public API. knockdrop reads them at 800 Hz through the bundled [`macimu`](https://github.com/olvvier/apple-silicon-accelerometer) library. It calibrates on 1.2 s of stillness, then counts short bursts of gyroscope energy above the noise floor as knocks. A knock twitches the chassis sharply; hands landing on the palm rest mostly show up on the accelerometer, so that's ignored.
 2. **Comparing rhythms.** Each gap between knocks becomes a fraction of the whole pattern, so a slow and a fast version of the same rhythm look identical. Two patterns match when every fraction is within the tolerance.
-3. **Finding each other.** The sender announces itself with UDP multicast and broadcast. The rhythm is never broadcast; only the sender ever compares it.
+3. **Finding each other.** The sender announces itself with UDP multicast and broadcast, and as a Bonjour service (`_knockdrop._tcp`), which is how iPhones find offers and announce theirs. The rhythm is never broadcast; only the sender ever compares it.
 4. **Transfer.** Files stream over TCP and are checked against their SHA-256 before saving. An offer closes after one transfer (or 5 minutes with `--multi`, which menu bar shares use), or after 8 wrong attempts.
 5. **Same table.** A knock on a table shakes every laptop on it. With *Notice Knocks on My Table from My Table* on, the receiver keeps the sensor running and remembers rhythms it felt in the last 20 seconds. When an offer with the same knock count appears right after, it claims the offer with the rhythm it felt. The sender checks it exactly like a knocked-in rhythm, so the table and people elsewhere use the same offer.
 
@@ -173,6 +202,7 @@ Any mix works: a knocker can share with a space-bar tapper.
 ```
 knockdrop.py      the whole app: knock detection, discovery, transfer, clipboard, background agent
 menubar/          the menu bar app (Swift); runs `knockdrop agent` and `knockdrop send --events`
+ios/              the iPhone app and share extension (SwiftUI); ios/test.sh checks it without Xcode
 macimu/           vendored sensor library (MIT, see macimu/LICENSE)
 tests/            end-to-end tests on one Mac (real sockets and clipboard, scripted knocks)
 eval/             record labelled knock clips and score detectors offline

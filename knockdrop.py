@@ -459,6 +459,126 @@ def human(n):
         n /= 1024
 
 
+# ---------------------------------------------------------------- Bonjour
+#
+# Offers are announced twice: UDP beacons (above) and a Bonjour service. iPhones can't send or
+# receive UDP broadcast/multicast without an entitlement Apple hands out case by case, but
+# Bonjour works for any app. Same offer, same TCP claim protocol; only discovery differs.
+#   type _knockdrop._tcp, SRV port = the offer's claim port,
+#   TXT v=1 id= from= knocks= n= (file count) size= (total bytes) [clip=text|image|files]
+# Everything here fails soft: no Bonjour just means UDP only, as before.
+
+SERVICE_TYPE = b"_knockdrop._tcp"
+_dnssd = None
+
+
+def beacon_modes():
+    """KNOCKDROP_BEACONS=udp|bonjour limits discovery to one path (tests); unset = both."""
+    m = os.environ.get("KNOCKDROP_BEACONS", "")
+    return {"udp", "bonjour"} & {m} or {"udp", "bonjour"}
+
+
+def dnssd():
+    """(libSystem with the dns_sd functions typed, ctypes, browse/resolve callback types)."""
+    global _dnssd
+    if _dnssd is None:
+        import ctypes as ct
+        lib = ct.CDLL("/usr/lib/libSystem.B.dylib")
+        ref_p, u32, i32, s = ct.POINTER(ct.c_void_p), ct.c_uint32, ct.c_int32, ct.c_char_p
+        browse_cb = ct.CFUNCTYPE(None, ct.c_void_p, u32, u32, i32, s, s, s, ct.c_void_p)
+        resolve_cb = ct.CFUNCTYPE(None, ct.c_void_p, u32, u32, i32, s, s, ct.c_uint16, ct.c_uint16,
+                                  ct.c_void_p, ct.c_void_p)
+        for fn, args in (("DNSServiceRegister", [ref_p, u32, u32, s, s, s, s, ct.c_uint16, ct.c_uint16, s,
+                                                 ct.c_void_p, ct.c_void_p]),
+                         ("DNSServiceBrowse", [ref_p, u32, u32, s, s, browse_cb, ct.c_void_p]),
+                         ("DNSServiceResolve", [ref_p, u32, u32, s, s, s, resolve_cb, ct.c_void_p]),
+                         ("DNSServiceProcessResult", [ct.c_void_p])):
+            getattr(lib, fn).argtypes, getattr(lib, fn).restype = args, i32
+        lib.DNSServiceRefSockFD.argtypes, lib.DNSServiceRefSockFD.restype = [ct.c_void_p], ct.c_int
+        lib.DNSServiceRefDeallocate.argtypes, lib.DNSServiceRefDeallocate.restype = [ct.c_void_p], None
+        _dnssd = (lib, ct, browse_cb, resolve_cb)
+    return _dnssd
+
+
+def utf8_cut(s, limit):
+    return s.encode()[:limit].decode(errors="ignore")
+
+
+def bonjour_register(name, port, txt):
+    """Advertise a service until bonjour_unregister(handle). None if Bonjour isn't available.
+    No callback: mDNSResponder renames on a name clash by itself, and withdraws the service
+    (with a goodbye packet) when we deallocate or our process dies."""
+    try:
+        lib, ct, _, _ = dnssd()
+        rec = b"".join(bytes([len(e)]) + e for e in (f"{k}={v}".encode()[:255] for k, v in txt.items()))
+        ref = ct.c_void_p()
+        err = lib.DNSServiceRegister(ct.byref(ref), 0, 0, utf8_cut(name, 63).encode(), SERVICE_TYPE, None, None,
+                                     socket.htons(port), len(rec), rec, None, None)
+        return ref if err == 0 else None
+    except Exception:
+        return None
+
+
+def bonjour_unregister(ref):
+    if ref:
+        try:
+            dnssd()[0].DNSServiceRefDeallocate(ref)
+        except Exception:
+            pass
+
+
+def parse_txt(raw):
+    out, i = {}, 0
+    while i < len(raw):
+        n = raw[i]
+        k, _, v = raw[i + 1:i + 1 + n].partition(b"=")
+        out[k.decode(errors="replace").lower()] = v.decode(errors="replace")
+        i += 1 + n
+    return out
+
+
+def bonjour_resolve(name, regtype, domain, iface, timeout=5.0):
+    """(host, port, txt dict) of one advertised instance, or None."""
+    lib, ct, _, resolve_cb = dnssd()
+    got = []
+
+    @resolve_cb
+    def on_resolve(_ref, _flags, _iface, err, _full, host, port, txt_len, txt, _ctx):
+        if err == 0 and host:
+            got.append((host.decode(), socket.ntohs(port), ct.string_at(txt, txt_len) if txt else b""))
+
+    ref = ct.c_void_p()
+    if lib.DNSServiceResolve(ct.byref(ref), 0, iface, name, regtype, domain, on_resolve, None) != 0:
+        return None
+    try:
+        fd, end = lib.DNSServiceRefSockFD(ref), time.time() + timeout
+        while not got and time.time() < end:
+            if select.select([fd], [], [], max(0.0, end - time.time()))[0] and lib.DNSServiceProcessResult(ref) != 0:
+                break
+    finally:
+        lib.DNSServiceRefDeallocate(ref)
+    if not got:
+        return None
+    host, port, txt = got[0]
+    return host, port, parse_txt(txt)
+
+
+def beacon_from_txt(txt, port):
+    """The same dict a UDP beacon carries, rebuilt from a Bonjour TXT record (None if it's not an offer)."""
+    try:
+        knocks, n, size = int(txt["knocks"]), int(txt.get("n", "1")), int(txt.get("size", "0"))
+    except (KeyError, ValueError):
+        return None
+    if txt.get("v") != "1" or not txt.get("id") or not MIN_KNOCKS <= knocks <= MAX_KNOCKS or not 0 < port < 65536:
+        return None
+    n = max(0, min(n, 1000))
+    m = {"app": "knockdrop", "v": 1, "id": txt["id"][:64], "from": (txt.get("from") or "someone")[:64],
+         "port": port, "knocks": knocks, "files": [{"name": "", "size": size // max(n, 1)}] * n}
+    if txt.get("clip") in CLIPBOARD_KINDS:
+        m["clipboard"] = txt["clip"]
+    return m
+
+
 # ---------------------------------------------------------------- clipboard
 
 # JavaScript for Automation (osascript) gives full NSPasteboard access with no dependencies.
@@ -604,6 +724,13 @@ class Offer:
             b["clipboard"] = self.clipboard
         return b
 
+    def txt(self):
+        t = {"v": 1, "id": self.id, "from": hostname(), "knocks": len(self.pattern),
+             "n": len(self.files), "size": sum(f["size"] for f in self.files)}
+        if self.clipboard:
+            t["clip"] = self.clipboard
+        return t
+
     def manifest(self):
         items = []
         for f in self.files:
@@ -713,8 +840,13 @@ def _send(args, source, paths, kind):
     srv.listen(8)
     srv.settimeout(0.5)
     port = srv.getsockname()[1]
+    modes = beacon_modes()
+    service = bonjour_register(f"{utf8_cut(hostname(), 56)} {offer.id[:6]}", port, offer.txt()) \
+        if "bonjour" in modes else None
 
     def beacons():
+        if "udp" not in modes:
+            return
         s = beacon_socket()
         msg = json.dumps(offer.beacon(port)).encode()
         dests, warned, rounds = beacon_destinations(), False, 0
@@ -758,6 +890,7 @@ def _send(args, source, paths, kind):
         print("\ncancelled")
     finally:
         offer.done.set()
+        bonjour_unregister(service)
         srv.close()
 
 
@@ -858,13 +991,19 @@ def local_addresses():
 
 
 class OfferListener:
-    """Collects offer beacons from the network in a background thread."""
+    """Collects offers from the network in background threads: UDP beacons, and Bonjour
+    services (how iPhones announce theirs)."""
 
     def __init__(self, allow_self=True):
         self.allow_self = allow_self
         self.offers, self.lock, self.stop = {}, threading.Lock(), threading.Event()
         self.mine, self.mine_at = set(), 0.0
-        threading.Thread(target=self._listen, daemon=True).start()
+        self.bonjour = {}     # instance name -> {"ifaces": set, "offer": (beacon, ip) or None}
+        modes = beacon_modes()
+        if "udp" in modes:
+            threading.Thread(target=self._listen, daemon=True).start()
+        if "bonjour" in modes:
+            threading.Thread(target=self._browse, daemon=True).start()
 
     def _is_mine(self, ip):
         if time.time() - self.mine_at > 10:   # follow Wi-Fi changes
@@ -889,13 +1028,82 @@ class OfferListener:
             with self.lock:
                 self.offers[msg["id"]] = (msg, ip, time.time())
 
+    def _browse(self):
+        """Follow _knockdrop._tcp services. Bonjour says when one goes away (the sender's
+        mDNSResponder sends a goodbye even if the app is killed), so they need no TTL."""
+        while not self.stop.is_set():
+            try:
+                lib, ct, browse_cb, _ = dnssd()
+            except Exception:
+                return
+
+            @browse_cb
+            def on_browse(_ref, flags, iface, err, name, regtype, domain, _ctx):
+                if err == 0 and name:
+                    self._browsed(bool(flags & 0x2), name, regtype, domain, iface)   # 0x2: kDNSServiceFlagsAdd
+
+            ref = ct.c_void_p()
+            if lib.DNSServiceBrowse(ct.byref(ref), 0, 0, SERVICE_TYPE, None, on_browse, None) != 0:
+                self.stop.wait(5)
+                continue
+            try:
+                fd = lib.DNSServiceRefSockFD(ref)
+                while not self.stop.is_set():
+                    if select.select([fd], [], [], 0.5)[0] and lib.DNSServiceProcessResult(ref) != 0:
+                        break   # mDNSResponder restarted: browse again
+            except (OSError, ValueError):
+                pass
+            finally:
+                lib.DNSServiceRefDeallocate(ref)
+                with self.lock:
+                    self.bonjour.clear()
+            self.stop.wait(2)
+
+    def _browsed(self, added, name, regtype, domain, iface):
+        with self.lock:   # one entry per instance, seen on one or more interfaces
+            inst = self.bonjour.get(name)
+            if not added:
+                if inst:
+                    inst["ifaces"].discard(iface)
+                    if not inst["ifaces"]:
+                        del self.bonjour[name]
+                return
+            if inst:
+                inst["ifaces"].add(iface)
+                return
+            self.bonjour[name] = inst = {"ifaces": {iface}, "offer": None}
+        threading.Thread(target=self._resolve, args=(name, regtype, domain, iface, inst), daemon=True).start()
+
+    def _resolve(self, name, regtype, domain, iface, inst):
+        try:
+            r = None
+            for _ in range(3):   # Bonjour reports an instance once, so a resolve that times out must retry
+                r = bonjour_resolve(name, regtype, domain, iface)
+                if r is not None or self.bonjour.get(name) is not inst:
+                    break
+            if r is None:
+                return
+            host, port, txt = r
+            m = beacon_from_txt(txt, port)
+            ip = socket.getaddrinfo(host, port, socket.AF_INET, socket.SOCK_STREAM)[0][4][0] if m else None
+        except Exception:
+            return
+        if m and (self.allow_self or not self._is_mine(ip)):
+            with self.lock:
+                if self.bonjour.get(name) is inst:   # not removed meanwhile
+                    inst["offer"] = (m, ip)
+
     def live(self):
-        """[(beacon, ip)] for offers heard in the last few seconds."""
+        """[(beacon, ip)] for offers heard in the last few seconds, or still advertised over Bonjour."""
         with self.lock:
             now = time.time()
             for k in [k for k, (_, _, seen) in self.offers.items() if now - seen > OFFER_SEEN_TTL]:
                 del self.offers[k]
-            return [(m, ip) for m, ip, _ in self.offers.values()]
+            out = {k: (m, ip) for k, (m, ip, _) in self.offers.items()}
+            for inst in self.bonjour.values():
+                if inst["offer"]:
+                    out.setdefault(inst["offer"][0]["id"], inst["offer"])   # UDP copy wins: it has file names
+            return list(out.values())
 
     def close(self):
         self.stop.set()
