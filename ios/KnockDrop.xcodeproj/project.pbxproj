@@ -1,0 +1,678 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 60;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		03858763C6463AC84E89ABF2 = {
+			isa = PBXBuildFile;
+			fileRef = 8BAF75B8F08415E6221A980C;
+		};
+		0496082E77B5956B39AA9569 = {
+			isa = PBXBuildFile;
+			fileRef = 70CFE5E649342634D3601D9A;
+		};
+		0B09F41207D22EE9633ECCE5 = {
+			isa = PBXBuildFile;
+			fileRef = 3402323F1601F6DEAB4BDD53;
+		};
+		1D0803D1986DC518D9DE25BC = {
+			isa = PBXBuildFile;
+			fileRef = 8BAF75B8F08415E6221A980C;
+		};
+		1DA90D28614838593E88D70D = {
+			isa = PBXBuildFile;
+			fileRef = 36EBA1F11CBDF3B55C59F0C8;
+			settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); };
+		};
+		22DE9CA6CE4FD9673D6E4829 = {
+			isa = PBXBuildFile;
+			fileRef = 2EDA1B78B51C8474F01F227D;
+		};
+		2454DE904425ACF56A3D52F1 = {
+			isa = PBXBuildFile;
+			fileRef = 173132344544EBD43ED6B40E;
+		};
+		27840D00227D682AFF1E1C99 = {
+			isa = PBXBuildFile;
+			fileRef = 2EDA1B78B51C8474F01F227D;
+		};
+		45491F31A6190AB7CE6053AF = {
+			isa = PBXBuildFile;
+			fileRef = A1BC80EA5B2787C49E0BA2A9;
+		};
+		4C3CDCF88F16AEB396348A56 = {
+			isa = PBXBuildFile;
+			fileRef = 70CFE5E649342634D3601D9A;
+		};
+		4D3657B41379C000CA3CB259 = {
+			isa = PBXBuildFile;
+			fileRef = A2D4818A61DD55C79F0D0190;
+		};
+		7086A986D258B8280C904AA5 = {
+			isa = PBXBuildFile;
+			fileRef = 1E53FE3FC82B999D16E7B034;
+		};
+		750DD2AB3F0FA523AFF3CB6D = {
+			isa = PBXBuildFile;
+			fileRef = 173132344544EBD43ED6B40E;
+		};
+		776C130E80D2563E8D36ECA5 = {
+			isa = PBXBuildFile;
+			fileRef = 0D5FCCA5D8EFEA5A182DE772;
+		};
+		7A1E035BF9F850745B879275 = {
+			isa = PBXBuildFile;
+			fileRef = FDBEEFB5409934C93C831DCB;
+		};
+		7E22F65AFC7B296319509CC1 = {
+			isa = PBXBuildFile;
+			fileRef = 12056441B807D73309DB2D43;
+		};
+		8A1E7AE4FD880136EB0E6E4A = {
+			isa = PBXBuildFile;
+			fileRef = D894FCA6EE41DF5898E8D165;
+		};
+		C599C63604B9B59725C4C07A = {
+			isa = PBXBuildFile;
+			fileRef = 7C19926AB99AEB50CF345132;
+		};
+		CECE651DADC5C53C6071708B = {
+			isa = PBXBuildFile;
+			fileRef = 0D5FCCA5D8EFEA5A182DE772;
+		};
+		D44C192C39CBD1EB16C1B5F2 = {
+			isa = PBXBuildFile;
+			fileRef = FA244BD612F5204538023A30;
+		};
+		D46BB4305F9951E3136C357C = {
+			isa = PBXBuildFile;
+			fileRef = 1E53FE3FC82B999D16E7B034;
+		};
+		DB0EE006D0F7672B304C5B2A = {
+			isa = PBXBuildFile;
+			fileRef = 3402323F1601F6DEAB4BDD53;
+		};
+		DF47C68BEF23A5E9AAAD89DB = {
+			isa = PBXBuildFile;
+			fileRef = 7C19926AB99AEB50CF345132;
+		};
+		E11FBF7688B051632B61902D = {
+			isa = PBXBuildFile;
+			fileRef = 12056441B807D73309DB2D43;
+		};
+		EB8E122A4A1AD95075782350 = {
+			isa = PBXBuildFile;
+			fileRef = FD6BDB3C5478E2D66E25822F;
+		};
+		F46A147B66435C896F28EAE4 = {
+			isa = PBXBuildFile;
+			fileRef = 66E156FC8843A4BC8148AEDB;
+		};
+		F8D636CD3659BFBC5DEBE405 = {
+			isa = PBXBuildFile;
+			fileRef = 278003FD1F057CDD26FB0F0F;
+		};
+		FB616B1FEF03185C9CEA528A = {
+			isa = PBXBuildFile;
+			fileRef = A1BC80EA5B2787C49E0BA2A9;
+		};
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		431387EB7262E1CFC79B125E = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 46F86FAA6BBF9AC94A7E4595;
+			proxyType = 1;
+			remoteGlobalIDString = A61A1A4E1A8A67F4C5D6A7AD;
+			remoteInfo = KnockDropShare;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		599E926F5D1203FE352478FC = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				1DA90D28614838593E88D70D,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		0D5FCCA5D8EFEA5A182DE772 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = Input.swift;
+			sourceTree = "<group>";
+		};
+		0EA5137CF4C86B879FDCF9FF = {
+			isa = PBXFileReference;
+			explicitFileType = wrapper.application;
+			includeInIndex = 0;
+			path = KnockDrop.app;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		12056441B807D73309DB2D43 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = Staging.swift;
+			sourceTree = "<group>";
+		};
+		173132344544EBD43ED6B40E = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = Views.swift;
+			sourceTree = "<group>";
+		};
+		1E53FE3FC82B999D16E7B034 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = Conn.swift;
+			sourceTree = "<group>";
+		};
+		278003FD1F057CDD26FB0F0F = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = MainView.swift;
+			sourceTree = "<group>";
+		};
+		2EDA1B78B51C8474F01F227D = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = Motion.swift;
+			sourceTree = "<group>";
+		};
+		3402323F1601F6DEAB4BDD53 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = OfferServer.swift;
+			sourceTree = "<group>";
+		};
+		36EBA1F11CBDF3B55C59F0C8 = {
+			isa = PBXFileReference;
+			explicitFileType = "wrapper.app-extension";
+			includeInIndex = 0;
+			path = KnockDropShare.appex;
+			sourceTree = BUILT_PRODUCTS_DIR;
+		};
+		53B0BE8F5A5B61DA2750B041 = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.xml;
+			path = Info.plist;
+			sourceTree = "<group>";
+		};
+		66E156FC8843A4BC8148AEDB = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = ReceivedView.swift;
+			sourceTree = "<group>";
+		};
+		70CFE5E649342634D3601D9A = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = Claim.swift;
+			sourceTree = "<group>";
+		};
+		7C19926AB99AEB50CF345132 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = Sharing.swift;
+			sourceTree = "<group>";
+		};
+		8BAF75B8F08415E6221A980C = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = Core.swift;
+			sourceTree = "<group>";
+		};
+		A1BC80EA5B2787C49E0BA2A9 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = Nearby.swift;
+			sourceTree = "<group>";
+		};
+		A2D4818A61DD55C79F0D0190 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = SettingsView.swift;
+			sourceTree = "<group>";
+		};
+		BF3EBA1FD7301F03B5240D69 = {
+			isa = PBXFileReference;
+			lastKnownFileType = text.plist.xml;
+			path = Info.plist;
+			sourceTree = "<group>";
+		};
+		D894FCA6EE41DF5898E8D165 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = AppModel.swift;
+			sourceTree = "<group>";
+		};
+		FA244BD612F5204538023A30 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = KnockDropApp.swift;
+			sourceTree = "<group>";
+		};
+		FD6BDB3C5478E2D66E25822F = {
+			isa = PBXFileReference;
+			lastKnownFileType = folder.assetcatalog;
+			path = Assets.xcassets;
+			sourceTree = "<group>";
+		};
+		FDBEEFB5409934C93C831DCB = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = ShareViewController.swift;
+			sourceTree = "<group>";
+		};
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		B44D944692E6EB394CDB88FB = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		E8915DD2B809C77D1C34FDFC = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		267AEBE1BACFD8AB573455B5 = {
+			isa = PBXGroup;
+			children = (
+				D894FCA6EE41DF5898E8D165,
+				FA244BD612F5204538023A30,
+				278003FD1F057CDD26FB0F0F,
+				66E156FC8843A4BC8148AEDB,
+				A2D4818A61DD55C79F0D0190,
+				FD6BDB3C5478E2D66E25822F,
+				BF3EBA1FD7301F03B5240D69,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		2AC8BA37DAC32D5437812408 = {
+			isa = PBXGroup;
+			children = (
+				0EA5137CF4C86B879FDCF9FF,
+				36EBA1F11CBDF3B55C59F0C8,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		3A7FE6E8A52728F0B2FA6DD4 = {
+			isa = PBXGroup;
+			children = (
+				FDBEEFB5409934C93C831DCB,
+				53B0BE8F5A5B61DA2750B041,
+			);
+			path = ShareExtension;
+			sourceTree = "<group>";
+		};
+		4EAE695AD1F489F78EA3E1C6 = {
+			isa = PBXGroup;
+			children = (
+				267AEBE1BACFD8AB573455B5,
+				9D10A42589C8F5479091BEBD,
+				3A7FE6E8A52728F0B2FA6DD4,
+				2AC8BA37DAC32D5437812408,
+			);
+			sourceTree = "<group>";
+		};
+		9D10A42589C8F5479091BEBD = {
+			isa = PBXGroup;
+			children = (
+				70CFE5E649342634D3601D9A,
+				1E53FE3FC82B999D16E7B034,
+				8BAF75B8F08415E6221A980C,
+				0D5FCCA5D8EFEA5A182DE772,
+				2EDA1B78B51C8474F01F227D,
+				A1BC80EA5B2787C49E0BA2A9,
+				3402323F1601F6DEAB4BDD53,
+				7C19926AB99AEB50CF345132,
+				12056441B807D73309DB2D43,
+				173132344544EBD43ED6B40E,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		05D1A555229C2AE9A7A90839 = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 1C7FD31B16FAC7BF475F5B5E;
+			buildPhases = (
+				5538E672428923D32B90B1BF,
+				B44D944692E6EB394CDB88FB,
+				DF0A7B391F72428A63A125FF,
+				599E926F5D1203FE352478FC,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				2254342BECCEAFBD04538E0A,
+			);
+			name = KnockDrop;
+			productName = KnockDrop;
+			productReference = 0EA5137CF4C86B879FDCF9FF;
+			productType = "com.apple.product-type.application";
+		};
+		A61A1A4E1A8A67F4C5D6A7AD = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A0B6389E6A7E1F41BDB58C25;
+			buildPhases = (
+				DE41D5FD12944B7893ECDDE5,
+				E8915DD2B809C77D1C34FDFC,
+				C28A0DB69E2115CF8BFBCAAC,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = KnockDropShare;
+			productName = KnockDropShare;
+			productReference = 36EBA1F11CBDF3B55C59F0C8;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		46F86FAA6BBF9AC94A7E4595 = {
+			isa = PBXProject;
+			attributes = {BuildIndependentTargetsInParallel = 1; LastSwiftUpdateCheck = 1500; LastUpgradeCheck = 1500; TargetAttributes = {05D1A555229C2AE9A7A90839 = {CreatedOnToolsVersion = 15.0;}; A61A1A4E1A8A67F4C5D6A7AD = {CreatedOnToolsVersion = 15.0;};};};
+			buildConfigurationList = 4DC842AFD6F1146FD0D47CEA;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = 4EAE695AD1F489F78EA3E1C6;
+			productRefGroup = 2AC8BA37DAC32D5437812408;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				05D1A555229C2AE9A7A90839,
+				A61A1A4E1A8A67F4C5D6A7AD,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		C28A0DB69E2115CF8BFBCAAC = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DF0A7B391F72428A63A125FF = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				EB8E122A4A1AD95075782350,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		5538E672428923D32B90B1BF = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				8A1E7AE4FD880136EB0E6E4A,
+				D44C192C39CBD1EB16C1B5F2,
+				F8D636CD3659BFBC5DEBE405,
+				F46A147B66435C896F28EAE4,
+				4D3657B41379C000CA3CB259,
+				4C3CDCF88F16AEB396348A56,
+				7086A986D258B8280C904AA5,
+				1D0803D1986DC518D9DE25BC,
+				CECE651DADC5C53C6071708B,
+				27840D00227D682AFF1E1C99,
+				45491F31A6190AB7CE6053AF,
+				DB0EE006D0F7672B304C5B2A,
+				C599C63604B9B59725C4C07A,
+				E11FBF7688B051632B61902D,
+				750DD2AB3F0FA523AFF3CB6D,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		DE41D5FD12944B7893ECDDE5 = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0496082E77B5956B39AA9569,
+				D46BB4305F9951E3136C357C,
+				03858763C6463AC84E89ABF2,
+				776C130E80D2563E8D36ECA5,
+				22DE9CA6CE4FD9673D6E4829,
+				FB616B1FEF03185C9CEA528A,
+				0B09F41207D22EE9633ECCE5,
+				DF47C68BEF23A5E9AAAD89DB,
+				7E22F65AFC7B296319509CC1,
+				2454DE904425ACF56A3D52F1,
+				7A1E035BF9F850745B879275,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		2254342BECCEAFBD04538E0A = {
+			isa = PBXTargetDependency;
+			target = A61A1A4E1A8A67F4C5D6A7AD;
+			targetProxy = 431387EB7262E1CFC79B125E;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		08723DE70035A45CE7E33CC1 = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		148E8C75014BB0826FADAE4F = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = App/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = KnockDrop;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "KnockDrop finds people sharing nearby on your Wi-Fi and sends and receives what they share.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "KnockDrop saves photos and videos people send you to your library when you ask it to.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks");
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.buzo1234.knockdrop;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		2708BDFE525E5BA46934FC69 = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ShareExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = KnockDrop;
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "KnockDrop finds people sharing nearby on your Wi-Fi and sends and receives what they share.";
+				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks");
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.buzo1234.knockdrop.share;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		4C44914A1215C5039EB6C861 = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = App/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = KnockDrop;
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "KnockDrop finds people sharing nearby on your Wi-Fi and sends and receives what they share.";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "KnockDrop saves photos and videos people send you to your library when you ask it to.";
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
+				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks");
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.buzo1234.knockdrop;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		80DB6ACE13380ADC3D86D6C5 = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		95841CF719403FA6A71F73FF = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = "";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = ShareExtension/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = KnockDrop;
+				INFOPLIST_KEY_NSLocalNetworkUsageDescription = "KnockDrop finds people sharing nearby on your Wi-Fi and sends and receives what they share.";
+				LD_RUNPATH_SEARCH_PATHS = ("$(inherited)", "@executable_path/Frameworks", "@executable_path/../../Frameworks");
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = io.github.buzo1234.knockdrop.share;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTS_MACCATALYST = NO;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		1C7FD31B16FAC7BF475F5B5E = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4C44914A1215C5039EB6C861,
+				148E8C75014BB0826FADAE4F,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		4DC842AFD6F1146FD0D47CEA = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				80DB6ACE13380ADC3D86D6C5,
+				08723DE70035A45CE7E33CC1,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A0B6389E6A7E1F41BDB58C25 = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				95841CF719403FA6A71F73FF,
+				2708BDFE525E5BA46934FC69,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = 46F86FAA6BBF9AC94A7E4595;
+}
